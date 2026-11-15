@@ -1,0 +1,6 @@
+{
+  "base_url": "https://api.deepseek.com",
+  "auth_token": "${LLM_TOKEN}",
+  "model": "deepseek-flash",
+  "max_concurrent": 2
+}

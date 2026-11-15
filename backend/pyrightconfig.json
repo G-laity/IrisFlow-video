@@ -1,0 +1,14 @@
+{
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": "none",
+  "reportPrivateUsage": "error",
+  "reportUnknownVariableType": "none",
+  "reportUnknownMemberType": "none",
+  "reportUnknownParameterType": "none",
+  "reportUnknownArgumentType": "none",
+  "pythonVersion": "3.14",
+  "include": ["."],
+  "exclude": [".venv", "__pycache__"],
+  "venvPath": ".",
+  "venv": ".venv"
+}
