@@ -79,8 +79,8 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://slippers.dev/ycb/2026/teams/IrisFlow.git
-cd IrisFlow
+git clone https://github.com/Laity999/IrisFlow-video.git
+cd IrisFlow-video
 ```
 
 ### 2. 启动后端
