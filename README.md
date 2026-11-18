@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.33.0-green)]()
+[![Version](https://img.shields.io/badge/版本-0.33.1-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -15,7 +15,7 @@
 |------|------|
 | 💬 流式聊天 | SSE 实时推送 `reasoning` / `content` / `tool_call` / `tool_result` 事件，心跳保活，页面刷新后可从事件历史续传 |
 | 🧠 思考模式 | 每轮对话独立开关，思考过程流式展示；兼容 DeepSeek 等模型的 `reasoning_content` 多轮回传校验 |
-| 🤖 Agent 工具循环 | 多轮工具调用推理：内置工具自动执行，自定义工具暂停等待手动执行后继续；自动工具循环最多 10 轮迭代 |
+| 🤖 Agent 工具循环 | 多轮工具调用推理：内置工具自动执行并循环回传直至模型给出最终回复；自定义工具暂停等待手动执行后继续（最多 10 轮迭代） |
 | 📐 上下文压缩 | 对话超出预算时自动压缩：长工具结果截断保留首尾 → 按轮丢弃最老对话（保持工具调用配对）→ 注入压缩提示；仅作用于请求副本，历史完整保留 |
 | 🗑️ 生成中止 | 随时终止正在生成/排队中的回复，会话状态自动恢复 |
 
@@ -123,7 +123,7 @@ pnpm dev                                       # 启动开发服务器
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.33.0",...}
+# → {"name":"IrisFlow","version":"0.33.1",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -215,8 +215,8 @@ graph TD
         ROUTER[router.py\n统一队列 + 健康门控]
         AGENT[agent.py\nAgent 工具调用循环]
         CONTEXT[context.py\n上下文压缩]
-        CLIENT[client.py\nOpenAI-compatible 网关]
-        TOOLS[ToolExecutor\n内置工具]
+        CLIENT[client.py\nLLM 网关客户端]
+        TOOLS[ToolExecutor\n工具执行器]
         MCP[MCPManager\n外部工具注入]
         SESSIONS[SessionStore\nSQLite 持久化]
     end
@@ -226,20 +226,27 @@ graph TD
         MCP_SRV[MCP 服务器\nPlaywright / GitHub / Agnes]
     end
     CONSOLE -->|REST + SSE| ROUTER
-    ROUTER --> AGENT
-    AGENT --> CONTEXT --> CLIENT
-    CLIENT -->|推理| GATEWAY
-    AGENT --> TOOLS
+    ROUTER -->|调度生成任务| AGENT
+    AGENT -->|"① 每轮迭代：压缩请求副本"| CONTEXT
+    CONTEXT --> CLIENT
+    CLIENT <-->|"流式 reasoning / content / tool_calls"| GATEWAY
+    CLIENT -->|tool_calls 事件| AGENT
+    AGENT -->|"② 发起工具调用"| TOOLS
     TOOLS -->|内置工具| WEB
+    TOOLS -->|"③ 执行结果回传 → 回到 ① 进入下一轮"| AGENT
+    TOOLS -.->|"自定义工具：SSE 下发，暂停等待"| CONSOLE
+    CONSOLE -.->|"手动执行结果回传"| ROUTER
     MCP -->|工具注册| TOOLS
     MCP -->|JSON-RPC| MCP_SRV
     ROUTER <-->|持久化| SESSIONS
 ```
 
+图中 ① → ② → ③ 构成 Agent 的**工具调用循环**：每轮迭代先压缩请求副本，再流式调用 LLM；模型发起工具调用时执行并将结果回传，进入下一轮，直至模型给出最终回复。自定义 / MCP 工具（虚线）暂停等待前端手动执行，经 `/api/agent/chat/continue` 续跑推理。
+
 ### 后端核心模块
 
 - **Chat**（`llm/chat.py`）— 消息历史容器，会话采样参数（temperature / max_tokens / top_p / top_k / 惩罚系数）随消息更新。
-- **Agent**（`llm/agent.py`）— 继承 Chat，工具调用推理循环（最多 10 轮）。自动工具直接执行；自定义工具暂停等待前端手动执行后 `continue_with_results()` 继续。
+- **Agent**（`llm/agent.py`）— 继承 Chat，工具调用推理循环。内置工具在 `router._generate` 的流式循环中自动执行并回传；自定义工具暂停等待前端手动执行，经 `continue_with_results()` 续跑（最多 10 轮）。
 - **Tools**（`llm/tools/`）— `ToolExecutor` 单例管理注册与执行（超时守护、错误隔离）。内置 `web_search` / `open_url` / `calculator`，MCP 工具经 `register()` 动态注入。
 - **MCP**（`llm/mcp.py`）— `MCPManager` 单例，标准 MCP 协议（JSON-RPC 2.0 over stdio/HTTP）。启动 diff 重连、运行时增删、文件监听热重载、进程健康检查。
 - **Client**（`llm/client.py`）— OpenAI-compatible API 封装。`chat_stream_events()` 产出带类型 SSE 事件（`reasoning` / `content` / `tool_calls`），流式工具调用增量累积；思考模式兼容 `reasoning_content` 多轮回传；400/5xx 错误记录响应体详情。

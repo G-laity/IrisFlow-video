@@ -224,6 +224,8 @@ DATA_URL_PREFIX = "data:{};base64,"
 MSG_SESSION_NOT_FOUND = "会话不存在"
 MSG_AGENT_SESSION_NOT_FOUND = "Agent 会话不存在"
 MSG_BUILTIN_GROUP = "内置"
+MSG_MAX_ITERATIONS = "已达到工具调用轮次上限，推理中止。请基于以上工具结果继续提问，或开启新对话。"
+MSG_EMPTY_REPLY = "（模型未返回文本内容，请重试或调整提问方式。）"
 
 # ── API 响应键（info.py / router.py）─────────────────────────
 

@@ -23,6 +23,7 @@ from llm.constants import (
     DEFAULT_TITLE,
     LLM_RECOVERY_POLL_INTERVAL,
     MCP_KEY_MCP_SERVERS,
+    MSG_EMPTY_REPLY,
     MSG_QUEUED,
     MSG_GENERATING,
     MSG_COMPLETED,
@@ -333,6 +334,13 @@ async def _generate(
             break
 
         if not pending_custom_tools:
+            # 空回复兜底：模型在工具调用后仅返回 reasoning 就 stop 时，
+            # 最终 assistant 消息 content 为空 → 前端渲染空气泡。补一条占位提示。
+            if not str(assistant_msg.content or "").strip():
+                assistant_msg.content = MSG_EMPTY_REPLY
+                await _emit({"type": SSE_CONTENT, "content": MSG_EMPTY_REPLY})
+                _log.info("[sess:%s] 模型返回空内容，已注入占位提示", session_id)
+
             # 自动生成标题（仅首次，title 为默认值时）
             current_title = await session_store.get_title(session_id)
             if current_title == DEFAULT_TITLE:

@@ -58,7 +58,7 @@ description: 当完成一组功能开发后，同步更新版本号与文档。
 - 新增的 API 端点（如有）
 - 新增的模块或设计模式（如有）
 
-<!--
+
 ### 5. Git 提交
 
 分两次提交：
@@ -66,7 +66,7 @@ description: 当完成一组功能开发后，同步更新版本号与文档。
 2. **frontend**：`chore: frontend version → X.Y.Z`
 
 **重要**：提交信息中**禁止**添加 `Co-Authored-By:` 行。仅使用标准 Conventional Commits 格式。
--->
+
 
 ## 示例
 

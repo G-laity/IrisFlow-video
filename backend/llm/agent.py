@@ -12,7 +12,7 @@ from llm.chat import Chat
 from llm.client import chat as client_chat
 from llm.client import parse_tool_call_for_display
 from llm.context import build_budget, compress_messages
-from llm.constants import ROLE_ASSISTANT, ROLE_TOOL
+from llm.constants import MSG_MAX_ITERATIONS, ROLE_ASSISTANT, ROLE_TOOL
 from llm.models import (
     AgentResponse,
     ChatMessage,
@@ -142,7 +142,7 @@ class Agent(Chat):
         _log.warning("Agent 达到最大迭代次数 (%d) 未完成", self.max_iterations)
         return AgentResponse(
             model=self.model,
-            content="",
+            content=MSG_MAX_ITERATIONS,
             tool_calls=tool_calls_history,
             iterations=iterations,
             finish_reason="max_iterations",

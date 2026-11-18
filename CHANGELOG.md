@@ -7,6 +7,17 @@
 
 ## 待发布
 
+## 0.33.1
+
+### 修复
+- **Agent 迭代上限空回复**：`Agent.continue_with_results` 达到最大迭代次数（10 轮）时不再返回空 `content`，改为返回明确的中止提示文案（新增常量 `MSG_MAX_ITERATIONS`）
+- **自动工具循环空回复兜底**：`router._generate` 流式循环结束后，若最终 assistant 消息 `content` 为空（模型仅输出 reasoning 即停止的场景），注入占位提示（`MSG_EMPTY_REPLY`）并同步推送 SSE `content` 事件，避免前端渲染空气泡
+- **pyright exclude 配置缺失**：`pyrightconfig.json` 补充 `venv` 目录排除——实际虚拟环境目录名与配置的 `.venv` 不符，导致项目级类型检查被第三方依赖噪音淹没（全量 2461 errors → 0 errors）
+
+### 文档
+- **README 架构图重写为循环结构**：原图为线性 `AGENT → CONTEXT → CLIENT`，与代码中实际存在的双循环不符；改为编号回边（① 每轮压缩请求副本 → ② 发起工具调用 → ③ 结果回传进入下一轮）+ 自定义工具 SSE 暂停 / 手动执行续跑的虚线路径
+- **README 循环描述修正**：移除"自动工具循环最多 10 轮迭代"的错误表述——10 轮上限仅作用于自定义工具路径（`Agent.continue_with_results`），自动工具循环为 `while True` 无迭代计数
+
 ## 0.33.0
 
 ### 修复
