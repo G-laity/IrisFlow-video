@@ -27,7 +27,7 @@ npx vue-tsc --noEmit             # 类型检查
 ## 关键设计
 
 - **config.py** — `AppConfig` 单例，配置从 `data/*.json` 加载，无 `.env`。`${VAR}` 密钥替换。
-- **agent.py** — `Agent(Chat)`，工具调用推理循环。`run_stream()` 遇自定义工具暂停，内置工具自动执行。
+- **agent.py + router.py** — 工具调用**双循环**：内置工具在 `router._generate` 流式循环（`while True`）自动执行并回传；自定义工具经 SSE 暂停 → `POST /api/agent/chat/continue` → `continue_with_results()` 续跑（最多 10 轮，自动循环无迭代计数）。
 - **llm/tools/** — `ToolExecutor` 单例，`Tool` 抽象基类 + 每工具独立模块。MCP 工具通过 `register()` 动态注入。
 - **mcp.py** — `MCPManager` 单例，标准 MCP 协议（JSON-RPC 2.0 over stdio/HTTP），运行时增删 + 文件监听热重载。
 - **client.py** — OpenAI-compatible API 封装，流式 SSE 事件（reasoning/content/tool_calls）。
@@ -43,3 +43,8 @@ npx vue-tsc --noEmit             # 类型检查
 - **toolMetadata** — 工具元数据模块级单例，`discoverTools()` 从后端拉取。
 - **FloatingWindow** — 通用浮窗框架：Teleport、拖拽、置顶、z-index 分层管理。
 - **Markdown** — markdown-it + KaTeX + highlight.js。
+
+## 开发流程
+
+- **PLAN.md** — 视频合成器（IRIS VIDEO COMPOSER）的唯一规划源：M1-M5 里程碑（0.34.0 → 0.38.0），含数据模型、API 表、ffmpeg 分段渲染管线、TTS/BGM provider 设计。
+- **工作流**：里程碑开工前将任务写入 `CHANGELOG.md` 待发布区作为开发指令 → `/implementation` 实施 → `/version-bump` 收尾（版本号 + README + CHANGELOG 转正）。版本号单一来源：`backend/pyproject.toml`。
