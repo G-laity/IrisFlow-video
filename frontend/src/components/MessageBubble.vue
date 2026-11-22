@@ -177,7 +177,13 @@ async function handleCopy() {
 .content {
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.6;
+  line-height: 1.7;
+}
+
+/* Markdown 渲染结果：HTML 标签之间的源码换行不能被 pre-wrap 当成空行 */
+.content.markdown {
+  white-space: normal;
+  line-height: 1.7;
 }
 
 .msg-images { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; margin-bottom: 4px; }
