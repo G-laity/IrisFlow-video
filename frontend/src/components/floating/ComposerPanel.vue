@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import FloatingWindow from "./FloatingWindow.vue";
 import AssetLibrary from "../composer/AssetLibrary.vue";
 import ProjectList from "../composer/ProjectList.vue";
+import RenderQueue from "../composer/RenderQueue.vue";
 import StoryboardEditor from "../composer/StoryboardEditor.vue";
 import {
   UI_COMPOSER,
@@ -12,9 +13,11 @@ import {
   UI_TAB_TIMELINE,
 } from "../../constants";
 import {
+  activeProjectId,
   refreshComposerAssets,
   refreshComposerConfig,
   refreshComposerProjects,
+  refreshComposerRenders,
   startComposerEvents,
   stopComposerEvents,
 } from "../../composables/useComposer";
@@ -31,7 +34,7 @@ const emit = defineEmits<{
 }>();
 
 // ── 标签页 ────────────────────────────────────────
-// M2：素材 / 项目 / 时间轴启用；渲染随 M3 开放。
+// M3：四个标签页全部启用。
 
 const activeTab = ref(UI_TAB_ASSETS);
 
@@ -39,7 +42,7 @@ const TABS = [
   { key: UI_TAB_ASSETS, icon: "fa-solid fa-photo-film", available: true },
   { key: UI_TAB_PROJECTS, icon: "fa-solid fa-clapperboard", available: true },
   { key: UI_TAB_TIMELINE, icon: "fa-solid fa-bars-staggered", available: true },
-  { key: UI_TAB_RENDERS, icon: "fa-solid fa-film", available: false },
+  { key: UI_TAB_RENDERS, icon: "fa-solid fa-film", available: true },
 ];
 
 function onProjectSelected(): void {
@@ -52,6 +55,7 @@ onMounted(() => {
   refreshComposerAssets();
   refreshComposerConfig();
   refreshComposerProjects();
+  refreshComposerRenders();
   startComposerEvents();
 });
 
@@ -90,6 +94,11 @@ onUnmounted(() => {
         <AssetLibrary v-if="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
         <ProjectList v-else-if="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
         <StoryboardEditor v-else-if="activeTab === UI_TAB_TIMELINE" />
+        <RenderQueue
+          v-else-if="activeTab === UI_TAB_RENDERS"
+          :project-id="activeProjectId || undefined"
+          @preview="payload => emit('preview', payload)"
+        />
       </div>
     </div>
   </FloatingWindow>

@@ -11,6 +11,8 @@ import type {
   ComposerMusicResponse,
   ComposerProject,
   ComposerProjectListResponse,
+  ComposerRender,
+  ComposerRenderListResponse,
   ComposerTTSResponse,
   Timeline,
   ConversationCreateRequest,
@@ -390,6 +392,30 @@ export function generateComposerMusic(body: {
   duration?: number;
 }): Promise<ComposerMusicResponse> {
   return request<ComposerMusicResponse>("POST", "/composer/assets/music", body);
+}
+
+// ── 渲染任务（/api/composer/renders）──────────────
+
+export function listComposerRenders(projectId?: string): Promise<ComposerRenderListResponse> {
+  const q = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+  return request<ComposerRenderListResponse>("GET", `/composer/renders${q}`);
+}
+
+export function startComposerRender(projectId: string): Promise<ComposerRender> {
+  return request<ComposerRender>("POST", `/composer/projects/${projectId}/render`);
+}
+
+export function getComposerRender(renderId: string): Promise<ComposerRender> {
+  return request<ComposerRender>("GET", `/composer/renders/${renderId}`);
+}
+
+export function cancelComposerRender(renderId: string): Promise<ComposerRender> {
+  return request<ComposerRender>("POST", `/composer/renders/${renderId}/cancel`);
+}
+
+/** 成品 MP4 播放 / 下载地址。 */
+export function composerRenderFileUrl(renderId: string, download = false): string {
+  return apiUrl(`${BASE}/composer/renders/${renderId}/file${download ? "?download=1" : ""}`);
 }
 
 /** multipart 文件上传（合成器素材等非 JSON 请求）。 */

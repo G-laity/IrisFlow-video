@@ -361,6 +361,39 @@ export interface ComposerMusicResponse {
   duplicated: boolean;
 }
 
+// ── 渲染任务（M3）──────────────────────────────────
+
+export type ComposerRenderState =
+  | "queued"
+  | "preparing"
+  | "rendering"
+  | "muxing"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export interface ComposerRenderStage {
+  total_segments?: number;
+  done_segments?: number;
+  current?: string;
+}
+
+export interface ComposerRender {
+  render_id: string;
+  project_id: string;
+  state: ComposerRenderState;
+  progress: number;
+  stage_detail: ComposerRenderStage;
+  output_path: string;
+  error: string;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface ComposerRenderListResponse {
+  renders: ComposerRender[];
+}
+
 /** 应用基本信息（来自 GET /） */
 export interface AppInfo {
   name: string;

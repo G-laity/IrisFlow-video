@@ -17,6 +17,9 @@ import {
   UI_PROJECT_SAVED,
   UI_PROJECT_SAVING,
   UI_PROJECT_SELECT_HINT,
+  UI_RENDER_START,
+  UI_RENDER_STARTED,
+  UI_RENDER_SUBMIT_FAILED,
   UI_SHOT_ADD,
   UI_SHOT_ASSET,
   UI_SHOT_DURATION,
@@ -38,7 +41,9 @@ import {
   composerPresets,
   composerSaveState,
   composerTimelineErrors,
+  parseComposerError,
   saveComposerTimeline,
+  startComposerRenderItem,
 } from "../../composables/useComposer";
 import type {
   ComposerAsset,
@@ -232,6 +237,35 @@ function presetOptions(): string[] {
 function totalDuration(): number {
   return shots.value.reduce((sum, s) => sum + (Number(s.duration) || 0), 0);
 }
+
+// ── 提交渲染 ─────────────────────────────────────
+
+const submittingRender = ref(false);
+const renderNotice = ref("");
+const renderError = ref("");
+
+async function submitRender(): Promise<void> {
+  const project = activeProject.value;
+  if (!project || submittingRender.value) return;
+  submittingRender.value = true;
+  renderNotice.value = "";
+  renderError.value = "";
+  try {
+    // 先确保最新编辑已保存
+    if (_saveTimer) {
+      clearTimeout(_saveTimer);
+      _saveTimer = null;
+    }
+    await doSave();
+    await startComposerRenderItem(project.project_id);
+    renderNotice.value = UI_RENDER_STARTED;
+    setTimeout(() => { renderNotice.value = ""; }, 5000);
+  } catch (e) {
+    renderError.value = `${UI_RENDER_SUBMIT_FAILED}：${parseComposerError(e).join("；")}`;
+  } finally {
+    submittingRender.value = false;
+  }
+}
 </script>
 
 <template>
@@ -260,10 +294,18 @@ function totalDuration(): number {
           <template v-else-if="composerSaveState === 'saved'"><i class="fa-solid fa-check"></i> {{ UI_PROJECT_SAVED }}</template>
           <template v-else-if="composerSaveState === 'error'"><i class="fa-solid fa-triangle-exclamation"></i> {{ UI_PROJECT_SAVE_ERROR }}</template>
         </span>
+        <button class="sb-render" :disabled="submittingRender || !shots.length" @click="submitRender">
+          <i v-if="submittingRender" class="fa-solid fa-spinner fa-spin"></i>
+          <i v-else class="fa-solid fa-film"></i>
+          {{ UI_RENDER_START }}
+        </button>
         <a class="sb-srt" :href="composerProjectSrtUrl(activeProject.project_id)" target="_blank" rel="noopener" :title="UI_DOWNLOAD">
           <i class="fa-solid fa-download"></i> SRT
         </a>
       </div>
+
+      <p v-if="renderNotice" class="sb-render-msg">{{ renderNotice }}</p>
+      <p v-if="renderError" class="sb-render-msg sb-render-msg--err">{{ renderError }}</p>
 
       <!-- 校验错误 -->
       <div v-if="composerTimelineErrors.length" class="sb-errors">
@@ -473,6 +515,25 @@ function totalDuration(): number {
   text-decoration: none;
 }
 .sb-srt:hover { color: var(--accent); border-color: var(--accent); }
+
+.sb-render {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+.sb-render:hover { color: var(--white); background: var(--accent); }
+.sb-render:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.sb-render-msg { margin: 0; font-size: 12px; color: var(--success); }
+.sb-render-msg--err { color: var(--error); }
 
 /* ── 错误 ── */
 

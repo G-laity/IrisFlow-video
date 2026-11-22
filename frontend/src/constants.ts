@@ -330,6 +330,9 @@ export const UI_NO_TEXT_CONTENT = "无文本内容";
 
 export const COMPOSER_SSE_ASSET = "composer_asset";
 export const COMPOSER_SSE_PROJECT = "composer_project";
+export const COMPOSER_SSE_RENDER = "composer_render";
+export const COMPOSER_SSE_PROGRESS = "composer_progress";
+export const COMPOSER_SSE_WARN = "composer_warn";
 export const COMPOSER_SSE_CONNECTED = "composer_connected";
 export const COMPOSER_KIND_IMAGE = "image";
 export const COMPOSER_KIND_VIDEO = "video";
@@ -413,6 +416,42 @@ export const UI_BGM_GENERATE = "生成入库";
 export const UI_GENERATING = "生成中…";
 export const UI_COMPOSER_PROVIDER_EDGE = "edge-tts 可用";
 export const UI_COMPOSER_PROVIDER_OFFLINE = "未连接";
+
+// ── 渲染队列（M3）────────────────────────────────
+
+export const UI_RENDER_QUEUE = "渲染队列";
+export const UI_RENDER_NONE = "暂无渲染任务";
+export const UI_RENDER_START = "提交渲染";
+export const UI_RENDER_STARTED = "已提交渲染，进度可在「渲染」标签页查看";
+export const UI_RENDER_CANCEL = "取消渲染";
+export const UI_RENDER_PREVIEW = "预览成片";
+export const UI_RENDER_DOWNLOAD = "下载成片";
+export const UI_RENDER_PROGRESS = "进度";
+export const UI_RENDER_ERROR = "错误详情";
+export const UI_RENDER_WARN = "合成器告警";
+export const UI_RENDER_SUBMIT_FAILED = "提交失败";
+
+export const COMPOSER_RENDER_ACTIVE_STATES = ["queued", "preparing", "rendering", "muxing"] as const;
+
+export const COMPOSER_RENDER_STATE_LABELS: Record<string, string> = {
+  queued: "排队中",
+  preparing: "分段准备",
+  rendering: "拼接中",
+  muxing: "字幕/混音",
+  completed: "已完成",
+  failed: "失败",
+  canceled: "已取消",
+};
+
+export const COMPOSER_RENDER_STATE_ICONS: Record<string, string> = {
+  queued: "fa-solid fa-clock",
+  preparing: "fa-solid fa-layer-group",
+  rendering: "fa-solid fa-link",
+  muxing: "fa-solid fa-sliders",
+  completed: "fa-solid fa-circle-check",
+  failed: "fa-solid fa-circle-xmark",
+  canceled: "fa-solid fa-ban",
+};
 
 /** MCP 服务器状态 ID → 展示文案 */
 export const MCP_STATUS_LABEL: Record<string, string> = {

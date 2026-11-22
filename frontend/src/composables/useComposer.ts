@@ -7,6 +7,7 @@ composer_asset 事件自动刷新。ComposerPanel / AssetLibrary 等多组件
 
 import { computed, ref } from "vue";
 import {
+  cancelComposerRender,
   composerAssetFileUrl,
   createComposerProject,
   deleteComposerAsset,
@@ -14,19 +15,24 @@ import {
   getComposerConfig,
   listComposerAssets,
   listComposerProjects,
+  listComposerRenders,
+  startComposerRender,
   subscribeComposerEvents,
   updateComposerProject,
 } from "../api/client";
 import {
   COMPOSER_ASSET_RECONNECT_DELAY,
   COMPOSER_SSE_ASSET,
+  COMPOSER_SSE_PROGRESS,
   COMPOSER_SSE_PROJECT,
   COMPOSER_SSE_READ_TIMEOUT,
+  COMPOSER_SSE_RENDER,
+  COMPOSER_SSE_WARN,
   SSE_DATA_PREFIX,
   SSE_DATA_PREFIX_LEN,
 } from "../constants";
 import { readWithTimeout } from "../api/client";
-import type { ComposerAsset, ComposerProject, Timeline } from "../types/api";
+import type { ComposerAsset, ComposerProject, ComposerRender, Timeline } from "../types/api";
 
 /** 素材列表（后端为唯一权威源） */
 export const composerAssets = ref<ComposerAsset[]>([]);
@@ -63,6 +69,12 @@ export const composerPresets = ref<Record<string, { width: number; height: numbe
 /** TTS 命名音色列表与默认音色（后端配置下发） */
 export const composerTtsVoices = ref<string[]>([]);
 export const composerTtsDefaultVoice = ref("");
+
+/** 渲染任务列表 */
+export const composerRenders = ref<ComposerRender[]>([]);
+
+/** 最近一条合成器告警（磁盘水位等） */
+export const composerRenderWarn = ref("");
 
 /** provider 探测状态（TTS / 音乐） */
 export const composerProviders = ref<{
@@ -172,6 +184,38 @@ export async function saveComposerTimeline(projectId: string, timeline: Timeline
   }
 }
 
+// ── 渲染任务 ───────────────────────────────────────
+
+/** 刷新渲染列表（projectId 空 = 全部）。 */
+export async function refreshComposerRenders(projectId?: string): Promise<void> {
+  try {
+    const resp = await listComposerRenders(projectId);
+    composerRenders.value = resp.renders;
+  } catch {
+    /* 静默 */
+  }
+}
+
+/** 提交渲染并 upsert 到列表。 */
+export async function startComposerRenderItem(projectId: string): Promise<ComposerRender> {
+  const render = await startComposerRender(projectId);
+  _upsertRender(render);
+  return render;
+}
+
+/** 取消渲染并更新列表。 */
+export async function cancelComposerRenderItem(renderId: string): Promise<ComposerRender> {
+  const render = await cancelComposerRender(renderId);
+  _upsertRender(render);
+  return render;
+}
+
+function _upsertRender(render: ComposerRender): void {
+  const idx = composerRenders.value.findIndex(r => r.render_id === render.render_id);
+  if (idx >= 0) composerRenders.value[idx] = { ...composerRenders.value[idx], ...render };
+  else composerRenders.value.unshift(render);
+}
+
 /** 解析后端错误：{detail: {message, errors[]}} → 错误列表。 */
 export function parseComposerError(e: unknown): string[] {
   if (e instanceof Error) {
@@ -208,6 +252,21 @@ export function stopComposerEvents(): void {
     clearTimeout(_reconnectTimer);
     _reconnectTimer = null;
   }
+}
+
+/** 应用渲染进度事件（轻量字段更新，不替换整条记录）。 */
+function _applyRenderProgress(event: Record<string, unknown>): void {
+  const renderId = String(event.render_id ?? "");
+  if (!renderId) return;
+  const idx = composerRenders.value.findIndex(r => r.render_id === renderId);
+  if (idx < 0) return;
+  const current = composerRenders.value[idx];
+  composerRenders.value[idx] = {
+    ...current,
+    progress: Number(event.progress ?? current.progress) || 0,
+    state: (event.state as ComposerRender["state"]) ?? current.state,
+    stage_detail: (event.stage_detail as ComposerRender["stage_detail"]) ?? current.stage_detail,
+  };
 }
 
 /** 应用 SSE 项目事件：本地 upsert / 移除，避免额外全量刷新。 */
@@ -251,6 +310,12 @@ async function _connect(): Promise<void> {
               await refreshComposerAssets();
             } else if (event.type === COMPOSER_SSE_PROJECT) {
               _applyProjectEvent(event);
+            } else if (event.type === COMPOSER_SSE_RENDER) {
+              if (event.render) _upsertRender(event.render as ComposerRender);
+            } else if (event.type === COMPOSER_SSE_PROGRESS) {
+              _applyRenderProgress(event);
+            } else if (event.type === COMPOSER_SSE_WARN) {
+              composerRenderWarn.value = String(event.message ?? "");
             }
           } catch {
             /* 心跳注释行或解析失败，忽略 */
