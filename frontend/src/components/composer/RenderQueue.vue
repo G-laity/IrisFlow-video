@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { composerRenderFileUrl } from "../../api/client";
+import { cleanupComposerStorage, composerRenderFileUrl } from "../../api/client";
 import {
   COMPOSER_RENDER_ACTIVE_STATES,
   COMPOSER_RENDER_STATE_ICONS,
   COMPOSER_RENDER_STATE_LABELS,
+  UI_CLEANUP_DISK,
   UI_RENDER_CANCEL,
   UI_RENDER_DOWNLOAD,
   UI_RENDER_ERROR,
@@ -34,6 +35,8 @@ const emit = defineEmits<{
 
 const submitting = ref(false);
 const actionError = ref("");
+const cleaning = ref(false);
+const cleanupMsg = ref("");
 
 const renders = computed<ComposerRender[]>(() => {
   if (!props.projectId) return composerRenders.value;
@@ -99,6 +102,21 @@ function refresh(): void {
   refreshComposerRenders(props.projectId);
 }
 
+async function handleCleanup(): Promise<void> {
+  if (cleaning.value) return;
+  cleaning.value = true;
+  cleanupMsg.value = "";
+  try {
+    const resp = await cleanupComposerStorage();
+    cleanupMsg.value = resp.message || "";
+    await refreshComposerRenders(props.projectId);
+  } catch (e) {
+    actionError.value = parseComposerError(e).join("；");
+  } finally {
+    cleaning.value = false;
+  }
+}
+
 onMounted(refresh);
 watch(() => props.projectId, refresh);
 </script>
@@ -119,11 +137,16 @@ watch(() => props.projectId, refresh);
         <i v-else class="fa-solid fa-play"></i>
         {{ UI_RENDER_START }}
       </button>
+      <button class="rq-btn" :disabled="cleaning" @click="handleCleanup" title="删除未引用素材与旧渲染产物">
+        <i :class="cleaning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-broom'"></i>
+        {{ UI_CLEANUP_DISK }}
+      </button>
       <button class="rq-btn" @click="refresh">
         <i class="fa-solid fa-rotate"></i>
       </button>
     </div>
     <p v-if="actionError" class="rq-error">{{ UI_RENDER_SUBMIT_FAILED }}：{{ actionError }}</p>
+    <p v-if="cleanupMsg" class="rq-cleanup">{{ cleanupMsg }}</p>
 
     <!-- 列表 -->
     <div v-if="renders.length" class="rq-list">
@@ -227,6 +250,7 @@ watch(() => props.projectId, refresh);
 .rq-btn--danger:hover { color: var(--error); border-color: var(--error); background: var(--error-bg-hover); }
 
 .rq-error { margin: 0; font-size: 12px; color: var(--error); white-space: pre-wrap; }
+.rq-cleanup { margin: 0; font-size: 12px; color: var(--success); }
 
 .rq-list { display: flex; flex-direction: column; gap: 8px; }
 

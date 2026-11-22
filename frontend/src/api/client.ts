@@ -6,8 +6,11 @@ import type {
   AppInfo,
   ComposerAsset,
   ComposerAssetListResponse,
+  ComposerCleanupResult,
   ComposerConfigResponse,
   ComposerImportResponse,
+  ComposerProjectTemplate,
+  ComposerTemplateListResponse,
   ComposerMusicResponse,
   ComposerProject,
   ComposerProjectListResponse,
@@ -417,6 +420,16 @@ export function cancelComposerRender(renderId: string): Promise<ComposerRender> 
 /** 成品 MP4 播放 / 下载地址。 */
 export function composerRenderFileUrl(renderId: string, download = false): string {
   return apiUrl(`${BASE}/composer/renders/${renderId}/file${download ? "?download=1" : ""}`);
+}
+
+// ── 模板 / 维护（M5）────────────────────────────
+
+export function listComposerTemplates(): Promise<ComposerTemplateListResponse> {
+  return request<ComposerTemplateListResponse>("GET", "/composer/templates");
+}
+
+export function cleanupComposerStorage(): Promise<ComposerCleanupResult> {
+  return request<ComposerCleanupResult>("POST", "/composer/maintenance/cleanup");
 }
 
 /** multipart 文件上传（合成器素材等非 JSON 请求）。 */

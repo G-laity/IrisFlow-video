@@ -474,6 +474,22 @@ export const UI_SUBTITLE_STYLE = "样式";
 export const UI_AUDIO_DUCKING = "旁白时压低";
 export const UI_TTS_SPLIT = "长文本自动分句";
 
+// ── M5：模板 / 清理 / 联动 ────────────────────────
+
+export const UI_SEND_TO_COMPOSER = "发送到合成器";
+export const UI_SENT_OK = "已发送到合成器素材库";
+export const UI_SENT_DEDUP = "素材已存在，已复用";
+export const UI_SEND_FAILED = "发送失败";
+export const UI_TEMPLATE_LABEL = "从模板新建";
+export const UI_TEMPLATE_NONE = "空白项目";
+export const UI_CLEANUP_DISK = "清理磁盘";
+export const UI_CLEANUP_DONE = "清理完成";
+export const UI_TIMELINE_STORYBOARD = "分镜";
+export const UI_TIMELINE_TRACKS = "轨道";
+export const UI_TRACK_PREVIEW = "播放头预览";
+export const UI_TRACK_NO_PREVIEW = "播放头处无线索";
+export const UI_RENDER_TOAST = "渲染完成，点击查看";
+
 export const COMPOSER_RENDER_STATE_ICONS: Record<string, string> = {
   queued: "fa-solid fa-clock",
   preparing: "fa-solid fa-layer-group",

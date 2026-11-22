@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
 import { composerProjectSrtUrl } from "../../api/client";
+import TimelineTracks from "./TimelineTracks.vue";
 import {
   COMPOSER_PANS,
   COMPOSER_PROJECT_SAVE_DELAY,
@@ -22,6 +23,8 @@ import {
   UI_PROJECT_SAVING,
   UI_PROJECT_SELECT_HINT,
   UI_RENDER_START,
+  UI_TIMELINE_STORYBOARD,
+  UI_TIMELINE_TRACKS,
   UI_RENDER_STARTED,
   UI_RENDER_SUBMIT_FAILED,
   UI_SHOT_ADD,
@@ -250,6 +253,7 @@ function totalDuration(): number {
 
 // ── 提交渲染 ─────────────────────────────────────
 
+const viewMode = ref<"storyboard" | "tracks">("storyboard");
 const submittingRender = ref(false);
 const renderNotice = ref("");
 const renderError = ref("");
@@ -299,6 +303,10 @@ async function submitRender(): Promise<void> {
         <select v-model="draft.preset" class="sb-preset" @change="scheduleSave">
           <option v-for="p in presetOptions()" :key="p" :value="p">{{ p }}</option>
         </select>
+        <div class="sb-view-toggle">
+          <button :class="{ on: viewMode === 'storyboard' }" @click="viewMode = 'storyboard'">{{ UI_TIMELINE_STORYBOARD }}</button>
+          <button :class="{ on: viewMode === 'tracks' }" @click="viewMode = 'tracks'">{{ UI_TIMELINE_TRACKS }}</button>
+        </div>
         <span class="sb-save" :class="`sb-save--${composerSaveState}`">
           <template v-if="composerSaveState === 'saving'"><i class="fa-solid fa-spinner fa-spin"></i> {{ UI_PROJECT_SAVING }}</template>
           <template v-else-if="composerSaveState === 'saved'"><i class="fa-solid fa-check"></i> {{ UI_PROJECT_SAVED }}</template>
@@ -322,6 +330,7 @@ async function submitRender(): Promise<void> {
         <p v-for="(err, i) in composerTimelineErrors" :key="i">· {{ err }}</p>
       </div>
 
+      <template v-if="viewMode === 'storyboard'">
       <!-- 镜头列表 -->
       <section class="sb-section">
         <div class="sb-section-head">
@@ -494,6 +503,8 @@ async function submitRender(): Promise<void> {
           </template>
         </div>
       </section>
+      </template>
+      <TimelineTracks v-else :timeline="draft" @changed="scheduleSave" />
     </template>
   </div>
 </template>
@@ -578,6 +589,24 @@ async function submitRender(): Promise<void> {
 .sb-render:hover { color: var(--white); background: var(--accent); }
 .sb-render:disabled { opacity: 0.45; cursor: not-allowed; }
 
+.sb-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.sb-view-toggle button {
+  padding: 5px 9px;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+.sb-view-toggle button.on {
+  color: var(--white);
+  background: var(--accent);
+}
 .sb-render-msg { margin: 0; font-size: 12px; color: var(--success); }
 .sb-render-msg--err { color: var(--error); }
 

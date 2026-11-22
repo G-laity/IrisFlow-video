@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { listComposerTemplates, updateComposerProject } from "../../api/client";
 import {
   UI_PROJECT_DELETE_CONFIRM,
   UI_PROJECT_NEW,
@@ -7,7 +8,10 @@ import {
   UI_PROJECT_SCRIPT_PLACEHOLDER,
   UI_PROJECT_TITLE_PLACEHOLDER,
   UI_DELETE,
+  UI_TEMPLATE_LABEL,
+  UI_TEMPLATE_NONE,
 } from "../../constants";
+import type { ComposerProjectTemplate, Timeline } from "../../types/api";
 import {
   activeProjectId,
   composerProjects,
@@ -26,10 +30,23 @@ const title = ref("");
 const script = ref("");
 const creating = ref(false);
 const error = ref("");
+const templates = ref<ComposerProjectTemplate[]>([]);
+const templateId = ref("");
 
-onMounted(() => {
+onMounted(async () => {
   refreshComposerProjects();
+  try {
+    const resp = await listComposerTemplates();
+    templates.value = resp.templates;
+  } catch {
+    /* 模板接口不可用时忽略 */
+  }
 });
+
+function onTemplateChange(): void {
+  const tpl = templates.value.find(t => t.id === templateId.value);
+  if (tpl && !script.value.trim()) script.value = tpl.script;
+}
 
 function select(projectId: string): void {
   selectComposerProject(projectId);
@@ -42,9 +59,22 @@ async function handleCreate(): Promise<void> {
   creating.value = true;
   error.value = "";
   try {
-    const project = await createComposerProjectItem(t, script.value.trim());
+    const tpl = templates.value.find(x => x.id === templateId.value);
+    const project = await createComposerProjectItem(
+      t, script.value.trim() || tpl?.script || "",
+    );
+    if (tpl) {
+      const empty: Timeline = {
+        version: 1,
+        preset: tpl.preset,
+        tracks: { video: [], audio: [], subtitles: [] },
+      };
+      await updateComposerProject(project.project_id, { timeline: empty });
+      await refreshComposerProjects();
+    }
     title.value = "";
     script.value = "";
+    templateId.value = "";
     emit("selected", project.project_id);
   } catch (e) {
     error.value = parseComposerError(e).join("\n");
@@ -67,6 +97,10 @@ async function handleDelete(projectId: string): Promise<void> {
   <div class="pl-body">
     <!-- 新建 -->
     <div class="pl-create">
+      <select v-model="templateId" class="pl-input" @change="onTemplateChange">
+        <option value="">{{ UI_TEMPLATE_LABEL }} · {{ UI_TEMPLATE_NONE }}</option>
+        <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+      </select>
       <input v-model="title" class="pl-input" :placeholder="UI_PROJECT_TITLE_PLACEHOLDER" @keydown.enter="handleCreate" />
       <textarea v-model="script" class="pl-textarea" rows="2" :placeholder="UI_PROJECT_SCRIPT_PLACEHOLDER" />
       <button class="pl-btn pl-btn--primary" :disabled="creating || !title.trim()" @click="handleCreate">

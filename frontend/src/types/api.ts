@@ -396,6 +396,32 @@ export interface ComposerRenderListResponse {
   renders: ComposerRender[];
 }
 
+// ── 模板 / 磁盘维护（M5）──────────────────────────
+
+export interface ComposerProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  preset: string;
+  script: string;
+}
+
+export interface ComposerTemplateListResponse {
+  templates: ComposerProjectTemplate[];
+}
+
+export interface ComposerCleanupResult {
+  skipped?: boolean;
+  reason?: string;
+  freed_bytes: number;
+  deleted_assets: number;
+  deleted_renders: number;
+  used_bytes?: number;
+  limit_bytes?: number;
+  target_bytes?: number;
+  message?: string;
+}
+
 /** 应用基本信息（来自 GET /） */
 export interface AppInfo {
   name: string;

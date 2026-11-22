@@ -4,7 +4,9 @@ import hljs from "highlight.js";
 import FloatingWindow from "./FloatingWindow.vue";
 import type { WorkflowEntry } from "../../types/api";
 import { md } from "../../utils/markdown";
-import { WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_CALL_PARAMS, UI_NO_TEXT_CONTENT, UI_RAW_DATA, UI_RETURN_RESULT, UI_SEARCH_RESULTS, UI_THOUGHT_CONTENT, UI_THOUGHT_PROCESS, UI_TOOL_CALL, UI_TOOL_LABEL, UI_TOOL_RESULT } from "../../constants";
+import { importComposerAssetUrl } from "../../api/client";
+import { parseComposerError } from "../../composables/useComposer";
+import { WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_CALL_PARAMS, UI_NO_TEXT_CONTENT, UI_RAW_DATA, UI_RETURN_RESULT, UI_SEARCH_RESULTS, UI_SEND_FAILED, UI_SEND_TO_COMPOSER, UI_SENT_DEDUP, UI_SENT_OK, UI_THOUGHT_CONTENT, UI_THOUGHT_PROCESS, UI_TOOL_CALL, UI_TOOL_LABEL, UI_TOOL_RESULT } from "../../constants";
 
 // ── props / emits ────────────────────────────
 
@@ -17,6 +19,32 @@ const emit = defineEmits<{
   "update:modelValue": [value: boolean];
   close: [];
 }>();
+
+// ── 发送到合成器（M5）────────────────────────
+
+const MEDIA_URL_RE = /https?:\/\/[^\s"'<>]+\.(?:mp4|mov|webm|mkv|avi|png|jpe?g|webp|gif|bmp|mp3|wav|m4a|aac|flac|ogg)(?:\?[^\s"'<>]*)?/i;
+
+const mediaUrl = computed<string>(() => {
+  if (props.entry.type !== WF_TOOL_RESULT || !props.entry.rawResult) return "";
+  return props.entry.rawResult.match(MEDIA_URL_RE)?.[0] ?? "";
+});
+
+const sending = ref(false);
+const sendMessage = ref("");
+
+async function sendToComposer(): Promise<void> {
+  if (!mediaUrl.value || sending.value) return;
+  sending.value = true;
+  sendMessage.value = "";
+  try {
+    const resp = await importComposerAssetUrl(mediaUrl.value);
+    sendMessage.value = resp.duplicated ? UI_SENT_DEDUP : UI_SENT_OK;
+  } catch (e) {
+    sendMessage.value = `${UI_SEND_FAILED}：${parseComposerError(e).join("；")}`;
+  } finally {
+    sending.value = false;
+  }
+}
 
 const showRaw = ref(false);
 
@@ -258,7 +286,13 @@ const headerIcon = computed(() => {
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('close')"
   >
+    <template v-if="mediaUrl" #actions>
+      <button class="btn-icon" :title="UI_SEND_TO_COMPOSER" :disabled="sending" @click.stop="sendToComposer">
+        <i :class="sending ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-clapperboard'"></i>
+      </button>
+    </template>
     <div class="wd-body">
+      <p v-if="sendMessage" class="wd-send-msg">{{ sendMessage }}</p>
       <!-- ── 工具名 ──────────────────────────── -->
       <div class="info-block">
         <div class="info-label">{{ UI_TOOL_LABEL }}</div>
@@ -477,5 +511,10 @@ const headerIcon = computed(() => {
   border: none;
   border-top: 1px solid var(--border);
   margin: 8px 0;
+}
+.wd-send-msg {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--success);
 }
 </style>

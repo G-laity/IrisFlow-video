@@ -10,6 +10,7 @@ import { getLLMConfig, ping, getServerUrl, setServerUrl } from "./api/client";
 import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_COMPOSER, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_CONVERSATION_LIST_KEY, REMOVE_SESSION_CACHE_KEY } from "./composables/injectionKeys";
 import { discoverTools } from "./composables/toolMetadata";
+import { composerToast, clearComposerToast } from "./composables/useComposer";
 import type { WorkflowEntry, PreviewPayload } from "./types/api";
 
 function onServerUrlInput(e: Event) {
@@ -212,6 +213,18 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     <i class="fa-solid fa-gear"></i>
   </button>
 
+  <!-- 渲染完成 toast（点击打开合成器） -->
+  <Transition name="app-toast">
+    <button
+      v-if="composerToast"
+      class="app-toast"
+      @click="showComposer = true; clearComposerToast()"
+    >
+      <i class="fa-solid fa-circle-check"></i>
+      {{ composerToast }}
+    </button>
+  </Transition>
+
   <!-- 断联占屏：心跳每 3s 自动重试，恢复后自动刷新 -->
   <div v-if="connectionLost" class="conn-lost-overlay">
     <div class="conn-lost-card">
@@ -336,4 +349,33 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
   outline: none;
 }
 .conn-lost-input:focus { border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════
+   渲染完成 toast
+   ═══════════════════════════════════════════════════ */
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 9000;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 22px;
+  border: 1px solid var(--accent);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: var(--shadow-md), 0 0 16px var(--accent-strong);
+}
+.app-toast i { color: var(--success); }
+
+.app-toast-enter-active,
+.app-toast-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.app-toast-enter-from,
+.app-toast-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
 </style>

@@ -76,6 +76,27 @@ export const composerRenders = ref<ComposerRender[]>([]);
 /** 最近一条合成器告警（磁盘水位等） */
 export const composerRenderWarn = ref("");
 
+/** 全局 toast（渲染完成等），5s 自动消失 */
+export const composerToast = ref("");
+let _toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function clearComposerToast(): void {
+  composerToast.value = "";
+  if (_toastTimer) {
+    clearTimeout(_toastTimer);
+    _toastTimer = null;
+  }
+}
+
+function _setToast(message: string): void {
+  composerToast.value = message;
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    composerToast.value = "";
+    _toastTimer = null;
+  }, 5000);
+}
+
 /** provider 探测状态（TTS / 音乐） */
 export const composerProviders = ref<{
   ttsPrimaryReachable: boolean;
@@ -254,6 +275,15 @@ export function stopComposerEvents(): void {
   }
 }
 
+/** 应用渲染状态事件：upsert + 完成时触发 toast。 */
+function _applyRenderEvent(render: ComposerRender): void {
+  const prev = composerRenders.value.find(r => r.render_id === render.render_id)?.state;
+  _upsertRender(render);
+  if (render.state === "completed" && prev !== "completed") {
+    _setToast("渲染完成，点击查看");
+  }
+}
+
 /** 应用渲染进度事件（轻量字段更新，不替换整条记录）。 */
 function _applyRenderProgress(event: Record<string, unknown>): void {
   const renderId = String(event.render_id ?? "");
@@ -311,7 +341,7 @@ async function _connect(): Promise<void> {
             } else if (event.type === COMPOSER_SSE_PROJECT) {
               _applyProjectEvent(event);
             } else if (event.type === COMPOSER_SSE_RENDER) {
-              if (event.render) _upsertRender(event.render as ComposerRender);
+              if (event.render) _applyRenderEvent(event.render as ComposerRender);
             } else if (event.type === COMPOSER_SSE_PROGRESS) {
               _applyRenderProgress(event);
             } else if (event.type === COMPOSER_SSE_WARN) {
