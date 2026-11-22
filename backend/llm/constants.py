@@ -213,6 +213,52 @@ PROJECT_DEFAULT_TITLE = "未命名项目"
 AGNES_VIDEO_POLL_INTERVAL = 1.5      # Agnes 视频状态轮询间隔（秒）
 AGNES_VIDEO_POLL_MAX = 600.0         # Agnes 视频状态最长等待（秒）
 
+# ── 渲染管线（composer/ffmpeg.py / queue.py）───────────────
+
+RENDER_QUEUED = "queued"
+RENDER_PREPARING = "preparing"
+RENDER_RENDERING = "rendering"
+RENDER_MUXING = "muxing"
+RENDER_COMPLETED = "completed"
+RENDER_FAILED = "failed"
+RENDER_CANCELED = "canceled"
+RENDER_ACTIVE_STATES = frozenset(
+    {RENDER_QUEUED, RENDER_PREPARING, RENDER_RENDERING, RENDER_MUXING}
+)
+
+COMPOSER_SSE_RENDER = "composer_render"
+COMPOSER_SSE_PROGRESS = "composer_progress"
+COMPOSER_SSE_WARN = "composer_warn"
+
+RENDER_PROGRESS_PREPARING = 0.60     # 分段渲染累计进度权重
+RENDER_PROGRESS_CONCAT = 0.68        # concat 完成时的全局进度
+RENDER_PROGRESS_THROTTLE = 1.0       # 进度 SSE 节流（秒）
+
+FFMPEG_VIDEO_PRESET = "veryfast"
+FFMPEG_CRF = "23"
+FFMPEG_AUDIO_BITRATE = "192k"
+FFMPEG_AUDIO_SAMPLE_RATE = 44100
+FFMPEG_PIX_FMT = "yuv420p"
+
+RENDER_DIR = "renders"
+RENDER_SEGMENT_DIR = "segments"
+RENDER_OUTPUT_NAME = "output.mp4"
+RENDER_SUBTITLES_NAME = "subtitles.srt"
+RENDER_SEGMENT_PATTERN = "seg_%03d.mp4"
+RENDER_CONCAT_LIST_NAME = "segments.txt"
+RENDER_LOG_DIR = "logs"
+RENDER_LOG_PREFIX = "composer-"
+RENDER_CANCEL_GRACE = 3.0            # terminate → kill 宽限（秒）
+RENDER_ERROR_TAIL = 500              # 失败时保留的 stderr 尾部字符数
+
+MSG_RENDER_FFMPEG_MISSING = "ffmpeg 不可用，无法渲染。请先安装 ffmpeg 或配置路径。"
+MSG_RENDER_NO_SEGMENTS = "时间轴没有可渲染的镜头，请先添加视频/图片素材。"
+MSG_RENDER_ALREADY_ACTIVE = "该项目已有进行中的渲染任务。"
+MSG_RENDER_INTERRUPTED = "服务重启，渲染任务中断"
+MSG_RENDER_NOT_FOUND = "渲染任务不存在"
+MSG_RENDER_CANCEL_REQUESTED = "已请求取消"
+MSG_RENDER_DISK_WARN = "合成器存储占用 {used} GB，已超过上限 {limit} GB，请清理素材或渲染产物。"
+
 # 素材 MIME 白名单：扩展名 → (kind, Content-Type)
 COMPOSER_MEDIA_EXTS: dict[str, tuple[str, str]] = {
     # 图片

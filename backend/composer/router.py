@@ -23,6 +23,7 @@ from composer import ffmpeg as composer_ffmpeg
 from composer import music as composer_music
 from composer import timeline as composer_timeline
 from composer import tts as composer_tts
+from composer.queue import render_queue
 from composer.store import composer_store
 from llm.constants import (
     COMPOSER_KIND_AUDIO,
@@ -34,10 +35,15 @@ from llm.constants import (
     COMPOSER_SSE_ASSET,
     COMPOSER_SSE_CONNECTED,
     COMPOSER_SSE_HEARTBEAT,
+    COMPOSER_SSE_PROGRESS,
     COMPOSER_SSE_PROJECT,
+    COMPOSER_SSE_RENDER,
+    COMPOSER_SSE_WARN,
     COMPOSER_STREAM_CHUNK,
     MSG_MUSIC_UNAVAILABLE,
+    MSG_RENDER_NOT_FOUND,
     MSG_TTS_UNAVAILABLE,
+    RENDER_COMPLETED,
     SSE_MEDIA_TYPE,
 )
 
@@ -60,6 +66,54 @@ async def broadcast_project(event_type: str, project: dict[str, object]) -> None
     """项目变更广播（创建 / 更新 / 删除）。"""
     event: dict[str, object] = {"type": COMPOSER_SSE_PROJECT, "event": event_type, "project": project}
     _broadcast(event)
+
+
+def _iso_render(render: dict[str, object]) -> dict[str, object]:
+    out = dict(render)
+    for key in ("created_at", "finished_at"):
+        ts = out.get(key)
+        if isinstance(ts, (int, float)):
+            from datetime import datetime, timezone
+            out[key] = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    return out
+
+
+def _merged_render(render: dict[str, object]) -> dict[str, object]:
+    """DB 行 + 内存 live 进度（状态迁移外的进度只驻内存）。"""
+    live = render_queue.live_snapshot(str(render["render_id"]))
+    merged = dict(render)
+    if live:
+        merged.update(live)
+    return _iso_render(merged)
+
+
+async def broadcast_render(render_id: str, live: dict[str, object] | None) -> None:
+    """渲染状态迁移广播（queue 调用）。"""
+    render = await composer_store.get_render(render_id)
+    if render is None:
+        return
+    merged = dict(render)
+    if live:
+        merged.update(live)
+    _broadcast({"type": COMPOSER_SSE_RENDER, "render": _iso_render(merged)})
+
+
+async def broadcast_progress(
+    render_id: str, progress: float, state: str, stage_detail: object
+) -> None:
+    """渲染进度广播（1s 节流，queue 调用）。"""
+    _broadcast({
+        "type": COMPOSER_SSE_PROGRESS,
+        "render_id": render_id,
+        "progress": progress,
+        "state": state,
+        "stage_detail": stage_detail,
+    })
+
+
+async def broadcast_warn(message: str) -> None:
+    """合成器告警广播（磁盘水位等）。"""
+    _broadcast({"type": COMPOSER_SSE_WARN, "message": message})
 
 
 def _broadcast(event: dict[str, object]) -> None:
@@ -335,6 +389,64 @@ async def get_project_srt(project_id: str):
     )
 
 
+# ── 渲染任务（M3）─────────────────────────────────────────
+
+
+@router.post("/projects/{project_id}/render")
+async def start_render(project_id: str):
+    """提交项目渲染（校验时间轴 → 入队），返回 render_id。"""
+    try:
+        render = await render_queue.submit(project_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="项目不存在") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from None
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from None
+    return _merged_render(render)
+
+
+@router.get("/renders")
+async def list_renders(project_id: str | None = None):
+    """渲染任务列表（按创建时间倒序，可 project_id 过滤）。"""
+    renders = await composer_store.list_renders(project_id)
+    return {"renders": [_merged_render(r) for r in renders]}
+
+
+@router.get("/renders/{render_id}")
+async def get_render(render_id: str):
+    """渲染任务详情（含实时进度）。"""
+    render = await composer_store.get_render(render_id)
+    if render is None:
+        raise HTTPException(status_code=404, detail=MSG_RENDER_NOT_FOUND)
+    return _merged_render(render)
+
+
+@router.post("/renders/{render_id}/cancel")
+async def cancel_render(render_id: str):
+    """取消渲染（queued 直接置 canceled；运行中杀 ffmpeg 子进程）。"""
+    render = await render_queue.cancel(render_id)
+    if render is None:
+        raise HTTPException(status_code=404, detail=MSG_RENDER_NOT_FOUND)
+    return _merged_render(render)
+
+
+@router.get("/renders/{render_id}/file")
+async def stream_render_file(render_id: str, request: Request, download: int = 0):
+    """成品 MP4 流式播放（Range）/ `?download=1` 附件下载。"""
+    render = await composer_store.get_render(render_id)
+    if render is None:
+        raise HTTPException(status_code=404, detail=MSG_RENDER_NOT_FOUND)
+    if str(render["state"]) != RENDER_COMPLETED or not render["output_path"]:
+        raise HTTPException(status_code=409, detail="渲染尚未完成")
+    path = composer_assets.asset_abs_path(str(render["output_path"]))
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="渲染产物文件缺失")
+    return _stream_file_response(
+        path, "video/mp4", request, download_name=f"{render_id}.mp4" if download else None
+    )
+
+
 # ── 素材文件流（Range 支持，供预览播放）────────────────────
 
 _RANGE_PATTERN = re.compile(r"^bytes=(\d*)-(\d*)$")
@@ -349,19 +461,15 @@ def _content_type_for(asset: dict[str, object]) -> str:
     return {COMPOSER_KIND_IMAGE: "image/png", COMPOSER_KIND_VIDEO: "video/mp4", COMPOSER_KIND_AUDIO: "audio/mpeg"}.get(str(kind), "application/octet-stream")
 
 
-@router.get("/assets/{asset_id}/file")
-async def stream_asset_file(asset_id: str, request: Request):
-    """素材流式播放（支持 HTTP Range，供视频预览 / 音频试听）。"""
-    asset = await composer_store.get_asset(asset_id)
-    if asset is None:
-        raise HTTPException(status_code=404, detail="素材不存在")
-    path = composer_assets.asset_abs_path(str(asset["file_path"]))
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="素材文件缺失")
-
+def _stream_file_response(
+    path: Path, content_type: str, request: Request, download_name: str | None = None
+):
+    """通用文件流式响应（HTTP Range + 可选附件下载）。"""
     size = path.stat().st_size
-    content_type = _content_type_for(asset)
     range_header = request.headers.get("range")
+    extra: dict[str, str] = {}
+    if download_name:
+        extra["Content-Disposition"] = f'attachment; filename="{download_name}"'
 
     def _chunk_stream(start: int, end: int) -> AsyncIterator[bytes]:
         async def _gen():
@@ -382,6 +490,7 @@ async def stream_asset_file(asset_id: str, request: Request):
             "Content-Type": content_type,
             "Accept-Ranges": "bytes",
             "Cache-Control": "no-cache",
+            **extra,
         }
         return StreamingResponse(_chunk_stream(0, size - 1), headers=headers)
 
@@ -413,8 +522,21 @@ async def stream_asset_file(asset_id: str, request: Request):
         "Content-Range": f"bytes {start}-{end}/{size}",
         "Accept-Ranges": "bytes",
         "Cache-Control": "no-cache",
+        **extra,
     }
     return StreamingResponse(_chunk_stream(start, end), status_code=206, headers=headers)
+
+
+@router.get("/assets/{asset_id}/file")
+async def stream_asset_file(asset_id: str, request: Request):
+    """素材流式播放（支持 HTTP Range，供视频预览 / 音频试听）。"""
+    asset = await composer_store.get_asset(asset_id)
+    if asset is None:
+        raise HTTPException(status_code=404, detail="素材不存在")
+    path = composer_assets.asset_abs_path(str(asset["file_path"]))
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="素材文件缺失")
+    return _stream_file_response(path, _content_type_for(asset), request)
 
 
 # ── SSE 状态流 ────────────────────────────────────────────

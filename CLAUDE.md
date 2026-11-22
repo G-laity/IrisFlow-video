@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.35.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
+IrisFlow v0.36.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
 
 ## 命令
 
@@ -34,7 +34,7 @@ npx vue-tsc --noEmit             # 类型检查
 - **context.py** — 上下文压缩：超预算时截断长工具结果 + 丢弃最老轮次，仅作用于请求副本。
 - **sessions.py** — `SessionStore`：SQLite 持久化 + LRU（100）+ TTL（1h），`asyncio.Lock` 守护。
 - **router.py** — 统一 FIFO 队列 + LLM 健康门控 + 并发控制，`asyncio.shield()` 保护 cleanup。
-- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目 CRUD / 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT）、`tts.py`（CosyVoice → 云端 → edge-tts 降级链）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（启动探测 + 元数据）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；本地模型 sidecar 见 `deploy/`（端口 9701/9702）。
+- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目/渲染 CRUD + 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT）、`tts.py`（CosyVoice → 云端 → edge-tts 降级链）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（探测 + 分段渲染/拼接/混音命令 + 进度解析）、`queue.py`（渲染队列 + 状态机 + 取消/优雅关闭）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；本地模型 sidecar 见 `deploy/`（端口 9701/9702）。
 - **constants.py / constants.ts** — 前后端共享常量，无硬编码字符串。
 
 ## 前端架构
@@ -48,5 +48,5 @@ npx vue-tsc --noEmit             # 类型检查
 
 ## 开发流程
 
-- **PLAN.md** — 视频合成器（IRIS VIDEO COMPOSER）的唯一规划源：M3-M5 里程碑（0.36.0 → 0.38.0），含数据模型、API 表、ffmpeg 分段渲染管线、TTS/BGM provider 设计。
+- **PLAN.md** — 视频合成器（IRIS VIDEO COMPOSER）的唯一规划源：M4-M5 里程碑（0.37.0 → 0.38.0），含数据模型、API 表、ffmpeg 分段渲染管线、TTS/BGM provider 设计。
 - **工作流**：里程碑开工前将任务写入 `CHANGELOG.md` 待发布区作为开发指令 → `/implementation` 实施 → `/version-bump` 收尾（版本号 + README + CHANGELOG 转正）。版本号单一来源：`backend/pyproject.toml`。

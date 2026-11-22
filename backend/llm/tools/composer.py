@@ -18,7 +18,7 @@ from llm.constants import (
     AGNES_VIDEO_POLL_MAX,
     MSG_COMPOSER_GROUP,
     MSG_MUSIC_UNAVAILABLE,
-    MSG_RENDER_NOT_READY,
+    RENDER_COMPLETED,
 )
 from llm.models import ToolDefinition
 from llm.tools.base import Tool
@@ -67,6 +67,13 @@ _TIMELINE_TEMPLATE = """{
     ]
   }
 }"""
+
+
+def _to_float(value: object, default: float = 0.0) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 def _json(data: object) -> str:
@@ -471,7 +478,10 @@ class ComposerSetTimelineTool(Tool):
 class ComposerStartRenderTool(Tool):
     definition = ToolDefinition(
         name="composer_start_render",
-        description="提交项目渲染任务（M3 上线；当前为占位，返回提示且时间轴已保存）。",
+        description=(
+            "提交项目渲染任务（异步队列）。返回 render_id 后不要阻塞等待，"
+            "告知用户可在合成器「渲染」标签页查看进度；稍后可调 composer_render_status 查询。"
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -486,15 +496,28 @@ class ComposerStartRenderTool(Tool):
     group = _GROUP
 
     async def execute(self, **kwargs: object) -> str:
+        from composer.queue import render_queue
+
         project_id = str(kwargs.get("project_id") or "")
         await _require_project(project_id)
-        return _json({"ok": False, "message": MSG_RENDER_NOT_READY, "project_id": project_id})
+        try:
+            render = await render_queue.submit(project_id)
+        except ValueError as e:
+            return _json({"ok": False, "message": str(e), "project_id": project_id})
+        except RuntimeError as e:
+            return _json({"ok": False, "message": str(e), "project_id": project_id})
+        return _json({
+            "ok": True,
+            "render_id": render["render_id"],
+            "state": render["state"],
+            "hint": "渲染在后台进行，可在合成器「渲染」标签页查看进度与成品。",
+        })
 
 
 class ComposerRenderStatusTool(Tool):
     definition = ToolDefinition(
         name="composer_render_status",
-        description="查询渲染任务状态（M3 上线；当前为占位）。",
+        description="查询渲染任务状态与进度（渲染中调用不阻塞）。",
         parameters={
             "type": "object",
             "properties": {
@@ -509,7 +532,25 @@ class ComposerRenderStatusTool(Tool):
     group = _GROUP
 
     async def execute(self, **kwargs: object) -> str:
-        return _json({"ok": False, "message": MSG_RENDER_NOT_READY, "render_id": kwargs.get("render_id")})
+        from composer.queue import render_queue
+        from composer.store import composer_store
+
+        render_id = str(kwargs.get("render_id") or "")
+        render = await composer_store.get_render(render_id)
+        if render is None:
+            return _json({"ok": False, "message": "渲染任务不存在", "render_id": render_id})
+        live = render_queue.live_snapshot(render_id)
+        if live:
+            render.update(live)
+        return _json({
+            "render_id": render_id,
+            "project_id": render["project_id"],
+            "state": render["state"],
+            "progress": round(_to_float(render.get("progress")), 3),
+            "stage_detail": render.get("stage_detail") or {},
+            "error": render.get("error") or "",
+            "output_ready": render["state"] == RENDER_COMPLETED,
+        })
 
 
 COMPOSER_TOOLS: list[Tool] = [

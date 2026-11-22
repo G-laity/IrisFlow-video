@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.35.0-green)]()
+[![Version](https://img.shields.io/badge/版本-0.36.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -145,7 +145,7 @@ edge-tts（免费、需联网），音乐可上传现成 BGM。
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.35.0",...}
+# → {"name":"IrisFlow","version":"0.36.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -180,6 +180,11 @@ curl http://localhost:8000/api/health
 | `/api/composer/projects` | GET / POST | 项目列表 / 创建（可携带脚本） |
 | `/api/composer/projects/{id}` | GET / PATCH / DELETE | 项目详情 / 更新（时间轴走 Schema 校验）/ 删除 |
 | `/api/composer/projects/{id}/srt` | GET | 下载时间轴字幕 SRT |
+| `/api/composer/projects/{id}/render` | POST | 提交渲染（异步队列，返回 render_id） |
+| `/api/composer/renders` | GET | 渲染任务列表（project_id 过滤） |
+| `/api/composer/renders/{id}` | GET | 渲染详情（状态 + 实时进度 + 错误） |
+| `/api/composer/renders/{id}/cancel` | POST | 取消渲染（杀 ffmpeg 子进程） |
+| `/api/composer/renders/{id}/file` | GET | 成品 MP4 流式播放（Range）/ `?download=1` 下载 |
 | `/api/composer/status-stream` | GET | 合成器事件流（SSE：素材 / 项目变更） |
 | `/api/composer/config` | GET / PUT | 合成器配置 + ffmpeg / TTS / 音乐 provider 探测 |
 
@@ -215,8 +220,9 @@ IrisFlow/
 │   │   ├── timeline.py           #   时间轴 Schema 校验 + SRT 生成 + 引用提取
 │   │   ├── tts.py                #   语音合成（local-http → openai-compat → edge-tts 降级链）
 │   │   ├── music.py              #   背景音乐生成（Stable Audio sidecar）
-│   │   ├── ffmpeg.py             #   ffmpeg/ffprobe 定位 + 启动探测 + 元数据探测
-│   │   └── router.py             #   REST + SSE 路由（素材 / 项目 / 配置 / 状态流）
+│   │   ├── ffmpeg.py             #   ffmpeg 定位/探测 + 分段渲染 / concat / 字幕混音命令 + 进度解析
+│   │   ├── queue.py              #   渲染队列：FIFO + worker + 状态机 + 取消 / 优雅关闭
+│   │   └── router.py             #   REST + SSE 路由（素材 / 项目 / 渲染 / 配置 / 状态流）
 │   ├── data/                     # 配置 JSON + SQLite 数据库（sessions.db）
 │   ├── pyproject.toml
 │   └── pyrightconfig.json
@@ -239,7 +245,8 @@ IrisFlow/
 │   │       ├── composer/         #     合成器子组件
 │   │       │   ├── AssetLibrary.vue      #     素材库 — 网格 + 过滤 + 上传/导入 + TTS/BGM 快捷生成
 │   │       │   ├── ProjectList.vue       #     项目列表 — 新建（标题 + 脚本）+ 选择 + 删除
-│   │       │   └── StoryboardEditor.vue  #     分镜编辑器 — 镜头卡片 + 字幕列表 + 旁白/BGM 轨（PATCH 即存）
+│   │       │   ├── StoryboardEditor.vue  #     分镜编辑器 — 镜头卡片 + 字幕列表 + 旁白/BGM 轨（PATCH 即存）
+│   │       │   └── RenderQueue.vue       #     渲染队列 — 进度条 + 状态灯 + 取消 + 成品预览/下载
 │   │       ├── ChatPanel.vue      #     聊天面板 — 消息滚动 + 会话加载
 │   │       ├── ChatInput.vue      #     输入框 — 工具切换 + 思考开关 + 文件上传
 │   │       ├── MessageBubble.vue  #     消息气泡 — Markdown 渲染 + 思考过程
@@ -327,7 +334,7 @@ graph TD
 
 - ✅ **M1 · 素材管线（0.34.0）**：素材库落地——URL 导入 / 本地上传（500 MB、仅媒体类型）、sha256 去重、ffprobe 元数据探测、hash 分桶存储、引用计数删除、合成器浮窗（网格缩略图 + 类型过滤）、SSE 实时推送、ffmpeg 启动探测与可配置路径
 - ✅ **M2 · 时间轴 + 编排 + 语音/音乐生成（0.35.0）**：时间轴 Schema 校验 + SRT 生成、项目 CRUD 与引用计数、Agent 八工具集（项目 / 素材导入 / Agnes 轮询入库 / TTS / BGM / 时间轴 / 渲染占位）、TTS 三级降级（CosyVoice sidecar → 云端 → edge-tts）、Stable Audio BGM、分镜编辑器（镜头 / 字幕 / 旁白 / BGM，PATCH 即存）、素材页 TTS/BGM 快捷生成、本地模型 sidecar 部署脚本（deploy/）
-- ⬜ **M3 · 渲染 MVP（0.36.0）**：ffmpeg 分段渲染管线 + 渲染队列 + 进度推送 + 出片下载
+- ✅ **M3 · 渲染 MVP（0.36.0）**：分段渲染 + concat 拼接 + SRT 字幕烧录 + 旁白/BGM 混音、渲染队列与状态机、SSE 实时进度、取消（杀进程）、成品 MP4 预览/下载、磁盘水位告警、重启中断恢复
 - ⬜ **M4 · 高级合成（0.37.0）**：转场 / Ken Burns 运镜 / ASS 样式字幕 / 音频进阶 / ACE-Step 主题曲
 - ⬜ **M5 · 体验完善（0.38.0）**：轨道式时间轴 / 项目模板 / 磁盘回收策略
 

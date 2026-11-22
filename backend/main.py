@@ -85,6 +85,13 @@ async def lifespan(app: FastAPI):
     except Exception:
         _log.exception("ffmpeg 启动探测异常（不影响启动，合成器功能将报告缺失）")
 
+    # ── 启动：渲染队列 worker（残留 active 任务标 failed）──
+    try:
+        from composer.queue import render_queue
+        await render_queue.start()
+    except Exception:
+        _log.exception("渲染队列启动异常（渲染功能不可用）")
+
     # ── 启动：清理过时的 PENDING 会话（上次运行中断残留）──
     try:
         from llm.sessions import session_store
@@ -97,6 +104,13 @@ async def lifespan(app: FastAPI):
         _log.warning("启动时清理残留会话状态失败，数据库可能尚不存在")
 
     yield
+    # ── 优雅关闭：终止渲染子进程、取消 worker ──
+    try:
+        from composer.queue import render_queue
+        await render_queue.shutdown()
+    except Exception:
+        _log.exception("渲染队列关闭异常")
+
     # ── 优雅关闭：终止生成、清空队列、通知订阅者 ──
     from llm.router import shutdown_generations
     await shutdown_generations()

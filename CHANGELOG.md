@@ -7,6 +7,24 @@
 
 ## 待发布
 
+## 0.36.0
+
+### 添加
+- **视频合成器 M3：渲染管线 MVP**（规划见 PLAN.md §7）
+  - `composer/ffmpeg.py` 扩展渲染引擎：分段规格化（图片 `-loop 1` / 视频 `-ss/-t`，统一 scale/pad/fps/yuv420p + libx264）、concat 拼接、字幕烧录 + 旁白/BGM `amix`（gain / fade / delay / loop 输入）+ `-movflags +faststart`；`run_ffmpeg` 解析 `-progress pipe:1`、stderr 尾部与完整日志、进程注册
+  - `composer/queue.py`（新）：渲染队列 FIFO + 并发 worker（`render_concurrency`）、状态机 `queued → preparing → rendering → muxing → completed/failed/canceled`、1s 节流进度、取消（terminate → 3s → kill）、优雅关闭、启动时中断任务标 failed、磁盘水位告警
+  - renders 持久化（`store.py` CRUD + active 检查 + 中断恢复）
+  - API：`POST /projects/{id}/render`、`GET /renders`、`GET /renders/{id}`、`POST /renders/{id}/cancel`、`GET /renders/{id}/file`（Range + `?download=1`）；SSE `composer_render` / `composer_progress` / `composer_warn`；Range 流式响应对素材与成品复用
+  - Agent 工具 `composer_start_render` / `composer_render_status` 接真实现（异步提交，不阻塞等待）
+  - 前端 `RenderQueue.vue`：状态灯 + 进度条 + stage、取消、成品预览（MediaPreview）、下载、失败 stderr 折叠、磁盘告警；分镜编辑器「提交渲染」按钮（先保存后提交）；ComposerPanel 四个标签页全部启用
+- 渲染常量：状态机、进度权重、编码参数（`veryfast` / `crf 23` / `aac 192k`）、文件命名、告警文案
+
+### 修复
+- **损坏素材导致渲染挂起**：图片分段 `-loop 1` 遇到无效图片会无限重试；所有 ffmpeg 命令加 `-xerror` 立即失败，错误进 render.error
+
+### 文档
+- **README**：API 一览补 5 个渲染端点、项目结构补 `queue.py` / `RenderQueue.vue`、下一步计划标记 M3 完成
+
 ## 0.35.0
 
 ### 添加
