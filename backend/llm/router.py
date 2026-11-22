@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import time as _time
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
@@ -19,6 +20,9 @@ from llm.context import build_budget, compress_messages
 from llm.agent import Agent
 from llm.chat import Chat
 from llm.constants import (
+    MSG_CURRENT_TIME,
+    MSG_NO_TOOLS_GUARD,
+    MSG_TOOL_FORMAT_GUARD,
     CLEANUP_DELAY,
     DEFAULT_TITLE,
     LLM_RECOVERY_POLL_INTERVAL,
@@ -203,6 +207,44 @@ async def _schedule_llm_recovery() -> None:
 # ── 后台 LLM 生成（独立函数，供 send_message_stream 与队列共用）───
 
 
+def _current_time_note() -> str:
+    """当前系统时间（本地时区）提示文本。"""
+    now = datetime.now().astimezone()
+    offset = now.strftime("%z")
+    if len(offset) == 5:
+        offset = f"UTC{offset[:3]}:{offset[3:]}"
+    tz_name = now.tzname() or "local"
+    return MSG_CURRENT_TIME.format(
+        time=now.strftime("%Y-%m-%d %H:%M:%S"),
+        tz=f"{offset} {tz_name}",
+    )
+
+
+def _inject_system_notes(messages: list[ChatMessage], has_tools: bool) -> list[ChatMessage]:
+    """在系统提示词末尾追加运行时信息（当前时间 + 工具调用格式约束）。
+
+    - 每轮请求重新生成时间，保证模型知道「今天」是哪天
+    - 无工具：明确告知模型不要伪造工具调用
+    - 有工具：要求只通过标准 tool_calls 调用，禁止正文文本标记
+    """
+    guard = MSG_TOOL_FORMAT_GUARD if has_tools else MSG_NO_TOOLS_GUARD
+    notes = chr(10).join([_current_time_note(), guard])
+    result = list(messages)
+    for i, msg in enumerate(result):
+        if msg.role == ROLE_SYSTEM:
+            raw = msg.content
+            if not isinstance(raw, str):
+                # 多模态 system 内容：不改原消息，单独追加一条约束
+                result.insert(0, ChatMessage(role=ROLE_SYSTEM, content=notes))
+                return result
+            content = raw.strip()
+            merged = chr(10).join([content, "", notes]) if content else notes
+            result[i] = msg.model_copy(update={"content": merged})
+            return result
+    result.insert(0, ChatMessage(role=ROLE_SYSTEM, content=notes))
+    return result
+
+
 async def _generate(
     session_id: str,
     chat: Chat,
@@ -257,6 +299,7 @@ async def _generate(
             api_messages, _dropped = compress_messages(
                 api_messages, build_budget(chat.max_tokens)
             )
+            api_messages = _inject_system_notes(api_messages, bool(resolved_tools))
             chat_request = ChatRequest(
                 model=chat.model,
                 messages=api_messages,

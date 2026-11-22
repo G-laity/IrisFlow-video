@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.39.1 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
+IrisFlow v0.40.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
 
 ## 命令
 
@@ -46,7 +46,8 @@ npx vue-tsc --noEmit             # 类型检查
 - **TimelineTracks** — 轨道式时间轴：时间标尺、播放头素材预览、视频块拖拽重排。
 - **FloatingWindow** — 通用浮窗框架：Teleport、拖拽、置顶、z-index 分层管理。
 - **Markdown** — markdown-it + KaTeX + highlight.js。
-- **无障碍/动效** — 全局 `:focus-visible`、`prefers-reduced-motion` 降级、浮窗 `role=dialog` + 开合动效、消息/列表入场动画。
+- **无障碍/动效** — 全局 `:focus-visible`（文本控件由边框承担）、`prefers-reduced-motion` 降级、浮窗 `role=dialog`、消息/列表入场与滑动指示框。
+- **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；浮窗与输入框液态玻璃（SVG 折射渐进增强 + 流动高光）。
 
 ## 开发流程
 

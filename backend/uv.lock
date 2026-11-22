@@ -177,7 +177,7 @@ wheels = [
 
 [[package]]
 name = "backend"
-version = "0.39.1"
+version = "0.40.0"
 source = { virtual = "." }
 dependencies = [
     { name = "edge-tts" },

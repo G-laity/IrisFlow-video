@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-GA-brightgreen)]()
-[![Version](https://img.shields.io/badge/版本-0.39.1-green)]()
+[![Version](https://img.shields.io/badge/版本-0.40.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -160,7 +160,7 @@ cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.39.1",...}
+# → {"name":"IrisFlow","version":"0.40.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -250,8 +250,8 @@ IrisFlow/
 │   │   ├── App.vue               #   根组件 — 会话列表 + 聊天面板 + 动态浮窗 + 心跳
 │   │   ├── api/client.ts         #   fetch 封装 + SSE 流式 + 可配置后端地址
 │   │   ├── constants.ts          #   全模块共享常量
-│   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + windowZIndex
-│   │   ├── utils/                #   纯函数 + Markdown 渲染 + 媒体类型判定
+│   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + useTheme + useTabIndicator + windowZIndex
+│   │   ├── utils/                #   纯函数 + Markdown 渲染（懒加载）+ 工具调用文本清洗 + 媒体类型判定
 │   │   └── components/           #   Vue SFC 组件
 │   │       ├── floating/          #     浮窗子窗体（全部基于 FloatingWindow 框架）
 │   │       │   ├── FloatingWindow.vue    #     通用浮窗框架 — 可拖拽 + 置顶 + 视口约束

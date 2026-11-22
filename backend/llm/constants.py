@@ -466,6 +466,16 @@ MSG_BUILTIN_GROUP = "内置"
 MSG_MAX_ITERATIONS = "已达到工具调用轮次上限，推理中止。请基于以上工具结果继续提问，或开启新对话。"
 MSG_EMPTY_REPLY = "（模型未返回文本内容，请重试或调整提问方式。）"
 
+# 工具调用格式约束（注入系统提示词，防止模型在正文输出 <tool_call> 文本标记）
+MSG_NO_TOOLS_GUARD = (
+    "当前没有可用工具。不要输出工具调用标记（如 <tool_call>…</tool_call>），"
+    "也不要声称已调用任何工具。如果问题需要实时信息，请说明你的知识截止日期与限制。"
+)
+MSG_TOOL_FORMAT_GUARD = (
+    "工具调用必须通过标准 tool_calls 字段完成，禁止在正文中输出 <tool_call> 等文本标记。"
+)
+MSG_CURRENT_TIME = "当前系统时间：{time}（{tz}）"
+
 # ── API 响应键（info.py / router.py）─────────────────────────
 
 RESPONSE_KEY_OK = "ok"
