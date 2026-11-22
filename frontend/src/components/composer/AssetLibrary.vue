@@ -27,6 +27,7 @@ import {
   UI_OPEN_IN_NEW_TAB,
   UI_TTS_GENERATE,
   UI_TTS_PANEL,
+  UI_TTS_SPLIT,
   UI_TTS_TEXT_PLACEHOLDER,
   UI_TTS_VOICE,
 } from "../../constants";
@@ -125,6 +126,7 @@ const ttsOpen = ref(false);
 const bgmOpen = ref(false);
 const ttsText = ref("");
 const ttsVoice = ref("");
+const ttsSplit = ref(true);
 const ttsBusy = ref(false);
 const bgmStyle = ref("");
 const bgmDuration = ref(11);
@@ -142,6 +144,7 @@ async function handleTts(): Promise<void> {
     const resp = await generateComposerTts({
       text,
       voice: ttsVoice.value || composerTtsDefaultVoice.value || undefined,
+      split: ttsSplit.value,
     });
     genNotice.value = resp.duplicated ? UI_ASSET_DEDUP_HIT : `旁白已入库（${resp.provider}）`;
     ttsText.value = "";
@@ -283,6 +286,10 @@ function probeSummary(asset: ComposerAsset): string {
             {{ ttsBusy ? UI_GENERATING : UI_TTS_GENERATE }}
           </button>
         </div>
+        <label class="al-check">
+          <input v-model="ttsSplit" type="checkbox" />
+          {{ UI_TTS_SPLIT }}
+        </label>
       </div>
 
       <button class="al-gen-head" @click="bgmOpen = !bgmOpen">
@@ -504,6 +511,15 @@ function probeSummary(asset: ComposerAsset): string {
 
 .al-gen-style { flex: 1; }
 .al-gen-msg { font-size: 11px; }
+
+.al-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
 
 /* ── 过滤 ── */
 

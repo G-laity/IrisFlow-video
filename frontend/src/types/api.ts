@@ -317,6 +317,8 @@ export interface TimelineAudioTrack {
   fade_in?: number;
   fade_out?: number;
   loop?: boolean;
+  /** BGM 是否在旁白出现时侧链压低（默认 true） */
+  ducking?: boolean;
 }
 
 export interface TimelineSubtitle {

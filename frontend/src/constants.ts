@@ -443,6 +443,37 @@ export const COMPOSER_RENDER_STATE_LABELS: Record<string, string> = {
   canceled: "已取消",
 };
 
+// ── 高级合成（M4）────────────────────────────────
+
+export const COMPOSER_TRANSITION_TYPES = [
+  { id: "fade", label: "淡入淡出" },
+  { id: "dissolve", label: "溶解" },
+  { id: "slide", label: "滑动" },
+] as const;
+
+export const COMPOSER_PANS = [
+  { id: "none", label: "无" },
+  { id: "left", label: "向左" },
+  { id: "right", label: "向右" },
+  { id: "up", label: "向上" },
+  { id: "down", label: "向下" },
+] as const;
+
+export const COMPOSER_SUBTITLE_STYLES = [
+  { id: "default", label: "默认" },
+  { id: "large", label: "大字" },
+  { id: "top", label: "顶部" },
+  { id: "minimal", label: "简约" },
+] as const;
+
+export const UI_SHOT_TRANSITION_TYPE = "转场类型";
+export const UI_SHOT_ZOOM_FROM = "起始缩放";
+export const UI_SHOT_ZOOM_TO = "结束缩放";
+export const UI_SHOT_PAN = "平移方向";
+export const UI_SUBTITLE_STYLE = "样式";
+export const UI_AUDIO_DUCKING = "旁白时压低";
+export const UI_TTS_SPLIT = "长文本自动分句";
+
 export const COMPOSER_RENDER_STATE_ICONS: Record<string, string> = {
   queued: "fa-solid fa-clock",
   preparing: "fa-solid fa-layer-group",

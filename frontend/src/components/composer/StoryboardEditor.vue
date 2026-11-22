@@ -2,8 +2,12 @@
 import { computed, onUnmounted, ref, watch } from "vue";
 import { composerProjectSrtUrl } from "../../api/client";
 import {
+  COMPOSER_PANS,
   COMPOSER_PROJECT_SAVE_DELAY,
+  COMPOSER_SUBTITLE_STYLES,
+  COMPOSER_TRANSITION_TYPES,
   UI_AUDIO_BGM,
+  UI_AUDIO_DUCKING,
   UI_AUDIO_FADE_IN,
   UI_AUDIO_FADE_OUT,
   UI_AUDIO_GAIN,
@@ -26,12 +30,17 @@ import {
   UI_SHOT_EMPTY,
   UI_SHOT_LIST,
   UI_SHOT_MOTION,
+  UI_SHOT_PAN,
   UI_SHOT_TRANSITION,
+  UI_SHOT_TRANSITION_TYPE,
   UI_SHOT_TRIM_IN,
+  UI_SHOT_ZOOM_FROM,
+  UI_SHOT_ZOOM_TO,
   UI_SUBTITLE_ADD,
   UI_SUBTITLE_END,
   UI_SUBTITLE_LIST,
   UI_SUBTITLE_START,
+  UI_SUBTITLE_STYLE,
   UI_SUBTITLE_TEXT,
 } from "../../constants";
 import {
@@ -200,6 +209,7 @@ function setAudioTrack(role: "narration" | "bgm", assetId: string): void {
         fade_in: role === "bgm" ? 0.5 : 0,
         fade_out: role === "bgm" ? 2.0 : 0,
         loop: role === "bgm",
+        ducking: role === "bgm",
       };
   track.asset_id = assetId;
   if (idx < 0) draft.value.tracks.audio.push(track);
@@ -354,6 +364,12 @@ async function submitRender(): Promise<void> {
               <input v-model.number="shot.trim_in" type="number" min="0" step="0.5" :disabled="assetById(shot.asset_id)?.kind === 'image'" @change="scheduleSave" />
             </label>
             <label class="sb-field">
+              <span>{{ UI_SHOT_TRANSITION_TYPE }}</span>
+              <select v-model="shot.transition_in!.type" :disabled="i === 0" @change="scheduleSave">
+                <option v-for="t in COMPOSER_TRANSITION_TYPES" :key="t.id" :value="t.id">{{ t.label }}</option>
+              </select>
+            </label>
+            <label class="sb-field">
               <span>{{ UI_SHOT_TRANSITION }}</span>
               <input
                 v-model.number="shot.transition_in!.duration"
@@ -368,6 +384,22 @@ async function submitRender(): Promise<void> {
                 <option value="kenburns">Ken Burns</option>
               </select>
             </label>
+            <template v-if="assetById(shot.asset_id)?.kind === 'image' && shot.motion?.type === 'kenburns'">
+              <label class="sb-field">
+                <span>{{ UI_SHOT_ZOOM_FROM }}</span>
+                <input v-model.number="shot.motion!.from_zoom" type="number" min="0.5" max="3" step="0.05" @change="scheduleSave" />
+              </label>
+              <label class="sb-field">
+                <span>{{ UI_SHOT_ZOOM_TO }}</span>
+                <input v-model.number="shot.motion!.to_zoom" type="number" min="0.5" max="3" step="0.05" @change="scheduleSave" />
+              </label>
+              <label class="sb-field">
+                <span>{{ UI_SHOT_PAN }}</span>
+                <select v-model="shot.motion!.pan" @change="scheduleSave">
+                  <option v-for="p in COMPOSER_PANS" :key="p.id" :value="p.id">{{ p.label }}</option>
+                </select>
+              </label>
+            </template>
             <button class="sb-del" :title="UI_DELETE" @click="removeShot(i)">
               <i class="fa-solid fa-trash"></i>
             </button>
@@ -391,6 +423,12 @@ async function submitRender(): Promise<void> {
           <label class="sb-field">
             <span>{{ UI_SUBTITLE_END }}</span>
             <input v-model.number="sub.end" type="number" min="0" step="0.1" @change="scheduleSave" />
+          </label>
+          <label class="sb-field">
+            <span>{{ UI_SUBTITLE_STYLE }}</span>
+            <select v-model="sub.style" @change="scheduleSave">
+              <option v-for="s in COMPOSER_SUBTITLE_STYLES" :key="s.id" :value="s.id">{{ s.label }}</option>
+            </select>
           </label>
           <label class="sb-field sb-field--grow">
             <span>{{ UI_SUBTITLE_TEXT }}</span>
@@ -444,6 +482,14 @@ async function submitRender(): Promise<void> {
             <label class="sb-check">
               <input v-model="bgm.loop" type="checkbox" @change="scheduleSave" />
               {{ UI_AUDIO_LOOP }}
+            </label>
+            <label class="sb-check">
+              <input
+                type="checkbox"
+                :checked="bgm.ducking !== false"
+                @change="bgm.ducking = ($event.target as HTMLInputElement).checked; scheduleSave()"
+              />
+              {{ UI_AUDIO_DUCKING }}
             </label>
           </template>
         </div>

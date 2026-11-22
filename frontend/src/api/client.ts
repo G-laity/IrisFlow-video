@@ -383,6 +383,7 @@ export function generateComposerTts(body: {
   text: string;
   voice?: string;
   speed?: number;
+  split?: boolean;
 }): Promise<ComposerTTSResponse> {
   return request<ComposerTTSResponse>("POST", "/composer/assets/tts", body);
 }
