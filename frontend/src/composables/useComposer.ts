@@ -5,23 +5,28 @@ composer_asset 事件自动刷新。ComposerPanel / AssetLibrary 等多组件
 共享同一份状态，不依赖 provide/inject（浮窗经 Teleport 到 body）。
 */
 
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import {
   composerAssetFileUrl,
+  createComposerProject,
   deleteComposerAsset,
+  deleteComposerProject,
   getComposerConfig,
   listComposerAssets,
+  listComposerProjects,
   subscribeComposerEvents,
+  updateComposerProject,
 } from "../api/client";
 import {
   COMPOSER_ASSET_RECONNECT_DELAY,
   COMPOSER_SSE_ASSET,
+  COMPOSER_SSE_PROJECT,
   COMPOSER_SSE_READ_TIMEOUT,
   SSE_DATA_PREFIX,
   SSE_DATA_PREFIX_LEN,
 } from "../constants";
 import { readWithTimeout } from "../api/client";
-import type { ComposerAsset } from "../types/api";
+import type { ComposerAsset, ComposerProject, Timeline } from "../types/api";
 
 /** 素材列表（后端为唯一权威源） */
 export const composerAssets = ref<ComposerAsset[]>([]);
@@ -32,6 +37,40 @@ export const composerKindFilter = ref<string>("all");
 /** ffmpeg / ffprobe 探测结果 */
 export const composerFfmpegAvailable = ref(false);
 export const composerFfmpegError = ref("");
+
+// ── 项目 / 时间轴 ──────────────────────────────────
+
+/** 项目列表（后端为唯一权威源） */
+export const composerProjects = ref<ComposerProject[]>([]);
+
+/** 当前选中的项目 ID */
+export const activeProjectId = ref("");
+
+/** 当前项目（派生） */
+export const activeProject = computed<ComposerProject | null>(
+  () => composerProjects.value.find(p => p.project_id === activeProjectId.value) ?? null,
+);
+
+/** 时间轴保存状态：idle / saving / saved / error */
+export const composerSaveState = ref<"idle" | "saving" | "saved" | "error">("idle");
+
+/** 时间轴校验错误（后端逐字段返回） */
+export const composerTimelineErrors = ref<string[]>([]);
+
+/** 分辨率预设表（后端配置下发） */
+export const composerPresets = ref<Record<string, { width: number; height: number; fps: number }>>({});
+
+/** TTS 命名音色列表与默认音色（后端配置下发） */
+export const composerTtsVoices = ref<string[]>([]);
+export const composerTtsDefaultVoice = ref("");
+
+/** provider 探测状态（TTS / 音乐） */
+export const composerProviders = ref<{
+  ttsPrimaryReachable: boolean;
+  ttsFallbackReachable: boolean;
+  edgeAvailable: boolean;
+  musicReachable: boolean;
+}>({ ttsPrimaryReachable: false, ttsFallbackReachable: false, edgeAvailable: false, musicReachable: false });
 
 let _reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let _abort: AbortController | null = null;
@@ -59,15 +98,97 @@ export async function removeComposerAsset(assetId: string): Promise<void> {
   await deleteComposerAsset(assetId);
 }
 
-/** 拉取 ffmpeg 探测状态。 */
+/** 拉取 ffmpeg / provider 探测状态。 */
 export async function refreshComposerConfig(): Promise<void> {
   try {
     const cfg = await getComposerConfig();
     composerFfmpegAvailable.value = cfg.ffmpeg_available && cfg.ffprobe_available;
     composerFfmpegError.value = cfg.error;
+    composerPresets.value = cfg.config.presets;
+    const ttsCfg = (cfg.config as unknown as { tts?: { voices?: Record<string, string>; default_voice?: string } }).tts;
+    if (ttsCfg?.voices) composerTtsVoices.value = Object.keys(ttsCfg.voices);
+    composerTtsDefaultVoice.value = ttsCfg?.default_voice ?? "";
+    const providers = cfg.providers;
+    if (providers) {
+      composerProviders.value = {
+        ttsPrimaryReachable: providers.tts.primary.reachable,
+        ttsFallbackReachable: providers.tts.fallback?.reachable ?? false,
+        edgeAvailable: providers.tts.edge_available,
+        musicReachable: providers.music.reachable,
+      };
+    }
   } catch {
     /* 静默 */
   }
+}
+
+// ── 项目操作 ───────────────────────────────────────
+
+/** 刷新项目列表。 */
+export async function refreshComposerProjects(): Promise<void> {
+  try {
+    const resp = await listComposerProjects();
+    composerProjects.value = resp.projects;
+  } catch {
+    /* 静默 */
+  }
+}
+
+export function selectComposerProject(projectId: string): void {
+  activeProjectId.value = projectId;
+  composerTimelineErrors.value = [];
+  composerSaveState.value = "idle";
+}
+
+/** 新建项目并选中。 */
+export async function createComposerProjectItem(title: string, script = ""): Promise<ComposerProject> {
+  const project = await createComposerProject({ title, script });
+  await refreshComposerProjects();
+  selectComposerProject(project.project_id);
+  return project;
+}
+
+/** 删除项目；若删除的是当前项目则清空选中。 */
+export async function removeComposerProjectItem(projectId: string): Promise<void> {
+  await deleteComposerProject(projectId);
+  if (activeProjectId.value === projectId) activeProjectId.value = "";
+  await refreshComposerProjects();
+}
+
+/** 保存时间轴（PATCH）；失败时解析后端逐字段错误。 */
+export async function saveComposerTimeline(projectId: string, timeline: Timeline): Promise<boolean> {
+  composerSaveState.value = "saving";
+  composerTimelineErrors.value = [];
+  try {
+    const updated = await updateComposerProject(projectId, { timeline });
+    const idx = composerProjects.value.findIndex(p => p.project_id === projectId);
+    if (idx >= 0) composerProjects.value[idx] = updated;
+    composerSaveState.value = "saved";
+    return true;
+  } catch (e) {
+    composerSaveState.value = "error";
+    composerTimelineErrors.value = parseComposerError(e);
+    return false;
+  }
+}
+
+/** 解析后端错误：{detail: {message, errors[]}} → 错误列表。 */
+export function parseComposerError(e: unknown): string[] {
+  if (e instanceof Error) {
+    try {
+      const parsed = JSON.parse(e.message);
+      const detail = parsed?.detail;
+      if (detail && typeof detail === "object") {
+        if (Array.isArray(detail.errors)) return detail.errors.map(String);
+        if (detail.message) return [String(detail.message)];
+      }
+      if (typeof detail === "string") return [detail];
+    } catch {
+      /* 非 JSON 错误体 */
+    }
+    return [e.message];
+  }
+  return [String(e)];
 }
 
 /** 启动 composer SSE 订阅（断线自动重连）。 */
@@ -87,6 +208,25 @@ export function stopComposerEvents(): void {
     clearTimeout(_reconnectTimer);
     _reconnectTimer = null;
   }
+}
+
+/** 应用 SSE 项目事件：本地 upsert / 移除，避免额外全量刷新。 */
+function _applyProjectEvent(event: Record<string, unknown>): void {
+  const action = event.event;
+  const data = event.project;
+  if (!data || typeof data !== "object") return;
+  const project = data as ComposerProject;
+  if (action === "deleted") {
+    const id = String((data as { project_id?: string }).project_id ?? "");
+    if (!id) return;
+    composerProjects.value = composerProjects.value.filter(p => p.project_id !== id);
+    if (activeProjectId.value === id) activeProjectId.value = "";
+    return;
+  }
+  if (!project.project_id) return;
+  const idx = composerProjects.value.findIndex(p => p.project_id === project.project_id);
+  if (idx >= 0) composerProjects.value[idx] = project;
+  else composerProjects.value.unshift(project);
 }
 
 async function _connect(): Promise<void> {
@@ -109,6 +249,8 @@ async function _connect(): Promise<void> {
             if (event.type === COMPOSER_SSE_ASSET) {
               // 素材变更：全量刷新列表（简单可靠，素材量级小）
               await refreshComposerAssets();
+            } else if (event.type === COMPOSER_SSE_PROJECT) {
+              _applyProjectEvent(event);
             }
           } catch {
             /* 心跳注释行或解析失败，忽略 */

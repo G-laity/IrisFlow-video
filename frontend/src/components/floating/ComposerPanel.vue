@@ -2,6 +2,8 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import FloatingWindow from "./FloatingWindow.vue";
 import AssetLibrary from "../composer/AssetLibrary.vue";
+import ProjectList from "../composer/ProjectList.vue";
+import StoryboardEditor from "../composer/StoryboardEditor.vue";
 import {
   UI_COMPOSER,
   UI_TAB_ASSETS,
@@ -12,6 +14,7 @@ import {
 import {
   refreshComposerAssets,
   refreshComposerConfig,
+  refreshComposerProjects,
   startComposerEvents,
   stopComposerEvents,
 } from "../../composables/useComposer";
@@ -28,22 +31,27 @@ const emit = defineEmits<{
 }>();
 
 // ── 标签页 ────────────────────────────────────────
-// M1 仅素材页启用；项目 / 时间轴 / 渲染随 M2 / M3 里程碑开放。
+// M2：素材 / 项目 / 时间轴启用；渲染随 M3 开放。
 
 const activeTab = ref(UI_TAB_ASSETS);
 
 const TABS = [
   { key: UI_TAB_ASSETS, icon: "fa-solid fa-photo-film", available: true },
-  { key: UI_TAB_PROJECTS, icon: "fa-solid fa-clapperboard", available: false },
-  { key: UI_TAB_TIMELINE, icon: "fa-solid fa-bars-staggered", available: false },
+  { key: UI_TAB_PROJECTS, icon: "fa-solid fa-clapperboard", available: true },
+  { key: UI_TAB_TIMELINE, icon: "fa-solid fa-bars-staggered", available: true },
   { key: UI_TAB_RENDERS, icon: "fa-solid fa-film", available: false },
 ];
+
+function onProjectSelected(): void {
+  activeTab.value = UI_TAB_TIMELINE;
+}
 
 // ── 生命周期：状态初始化 + SSE 订阅 ──────────────
 
 onMounted(() => {
   refreshComposerAssets();
   refreshComposerConfig();
+  refreshComposerProjects();
   startComposerEvents();
 });
 
@@ -78,9 +86,10 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- 素材库（M1 唯一启用的标签页） -->
       <div class="cp-content">
         <AssetLibrary v-if="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
+        <ProjectList v-else-if="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
+        <StoryboardEditor v-else-if="activeTab === UI_TAB_TIMELINE" />
       </div>
     </div>
   </FloatingWindow>

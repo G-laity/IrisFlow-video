@@ -329,6 +329,7 @@ export const UI_NO_TEXT_CONTENT = "无文本内容";
 // ── 视频合成器（ComposerPanel / AssetLibrary）────────────
 
 export const COMPOSER_SSE_ASSET = "composer_asset";
+export const COMPOSER_SSE_PROJECT = "composer_project";
 export const COMPOSER_SSE_CONNECTED = "composer_connected";
 export const COMPOSER_KIND_IMAGE = "image";
 export const COMPOSER_KIND_VIDEO = "video";
@@ -367,6 +368,51 @@ export const UI_ASSET_IMPORTING = "导入中…";
 export const UI_ASSET_NO_ASSETS = "暂无素材";
 export const UI_ASSET_DEDUP_HIT = "已存在相同素材，已复用";
 export const UI_COMPOSER_FFMPEG_MISSING = "未检测到 ffmpeg，探测元数据不可用";
+
+// ── 项目 / 分镜编辑器 ─────────────────────────────
+
+export const COMPOSER_PROJECT_SAVE_DELAY = 600;   // 时间轴编辑保存防抖（ms）
+export const UI_PROJECT_NEW = "新建项目";
+export const UI_PROJECT_TITLE_PLACEHOLDER = "项目标题";
+export const UI_PROJECT_SCRIPT_PLACEHOLDER = "分镜脚本（可选）…";
+export const UI_PROJECT_NO_PROJECTS = "暂无项目";
+export const UI_PROJECT_SELECTED = "当前项目";
+export const UI_PROJECT_SELECT_HINT = "先在「项目」标签页选择或创建项目";
+export const UI_PROJECT_DELETE_CONFIRM = "确认删除该项目？时间轴与素材引用将一并清除（素材文件保留）。";
+export const UI_PROJECT_SAVED = "已保存";
+export const UI_PROJECT_SAVING = "保存中…";
+export const UI_PROJECT_SAVE_ERROR = "保存失败";
+export const UI_SHOT_LIST = "镜头";
+export const UI_SHOT_ADD = "添加镜头";
+export const UI_SHOT_EMPTY = "暂无镜头，先在素材页导入视频/图片";
+export const UI_SHOT_DURATION = "时长（秒）";
+export const UI_SHOT_TRIM_IN = "入点（秒）";
+export const UI_SHOT_TRANSITION = "转场时长（秒）";
+export const UI_SHOT_MOTION = "运镜";
+export const UI_SHOT_ASSET = "素材";
+export const UI_SUBTITLE_LIST = "字幕";
+export const UI_SUBTITLE_ADD = "添加字幕";
+export const UI_SUBTITLE_START = "开始（秒）";
+export const UI_SUBTITLE_END = "结束（秒）";
+export const UI_SUBTITLE_TEXT = "字幕文本";
+export const UI_AUDIO_TRACKS = "音频轨";
+export const UI_AUDIO_NARRATION = "旁白";
+export const UI_AUDIO_BGM = "背景音乐";
+export const UI_AUDIO_GAIN = "音量";
+export const UI_AUDIO_FADE_IN = "淡入（秒）";
+export const UI_AUDIO_FADE_OUT = "淡出（秒）";
+export const UI_AUDIO_LOOP = "循环铺满";
+export const UI_AUDIO_NONE = "无";
+export const UI_TTS_PANEL = "旁白合成（TTS）";
+export const UI_TTS_TEXT_PLACEHOLDER = "输入旁白文本…";
+export const UI_TTS_VOICE = "音色";
+export const UI_TTS_GENERATE = "合成入库";
+export const UI_BGM_PANEL = "背景音乐生成";
+export const UI_BGM_STYLE_PLACEHOLDER = "风格描述，如：轻快的电子氛围";
+export const UI_BGM_GENERATE = "生成入库";
+export const UI_GENERATING = "生成中…";
+export const UI_COMPOSER_PROVIDER_EDGE = "edge-tts 可用";
+export const UI_COMPOSER_PROVIDER_OFFLINE = "未连接";
 
 /** MCP 服务器状态 ID → 展示文案 */
 export const MCP_STATUS_LABEL: Record<string, string> = {

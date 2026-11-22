@@ -8,6 +8,11 @@ import type {
   ComposerAssetListResponse,
   ComposerConfigResponse,
   ComposerImportResponse,
+  ComposerMusicResponse,
+  ComposerProject,
+  ComposerProjectListResponse,
+  ComposerTTSResponse,
+  Timeline,
   ConversationCreateRequest,
   ConversationDetail,
   ConversationListResponse,
@@ -335,6 +340,56 @@ export function updateComposerConfig(
 /** 素材文件流地址（图片 / 视频 / 音频播放，后端支持 Range）。 */
 export function composerAssetFileUrl(assetId: string): string {
   return apiUrl(`${BASE}/composer/assets/${assetId}/file`);
+}
+
+// ── 合成器项目（/api/composer/projects）────────────
+
+export function listComposerProjects(): Promise<ComposerProjectListResponse> {
+  return request<ComposerProjectListResponse>("GET", "/composer/projects");
+}
+
+export function getComposerProject(projectId: string): Promise<ComposerProject> {
+  return request<ComposerProject>("GET", `/composer/projects/${projectId}`);
+}
+
+export function createComposerProject(body: {
+  title?: string;
+  script?: string;
+}): Promise<ComposerProject> {
+  return request<ComposerProject>("POST", "/composer/projects", body);
+}
+
+export function updateComposerProject(
+  projectId: string,
+  body: { title?: string; script?: string; timeline?: Timeline },
+): Promise<ComposerProject> {
+  return request<ComposerProject>("PATCH", `/composer/projects/${projectId}`, body);
+}
+
+export function deleteComposerProject(projectId: string): Promise<{ ok: boolean; deleted: string }> {
+  return request<{ ok: boolean; deleted: string }>("DELETE", `/composer/projects/${projectId}`);
+}
+
+/** 项目当前时间轴字幕 SRT 下载地址。 */
+export function composerProjectSrtUrl(projectId: string): string {
+  return apiUrl(`${BASE}/composer/projects/${projectId}/srt`);
+}
+
+// ── 合成器生成（TTS / BGM）────────────────────────
+
+export function generateComposerTts(body: {
+  text: string;
+  voice?: string;
+  speed?: number;
+}): Promise<ComposerTTSResponse> {
+  return request<ComposerTTSResponse>("POST", "/composer/assets/tts", body);
+}
+
+export function generateComposerMusic(body: {
+  style: string;
+  duration?: number;
+}): Promise<ComposerMusicResponse> {
+  return request<ComposerMusicResponse>("POST", "/composer/assets/music", body);
 }
 
 /** multipart 文件上传（合成器素材等非 JSON 请求）。 */

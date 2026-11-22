@@ -280,6 +280,85 @@ export interface ComposerConfigResponse {
   ffmpeg_path: string;
   ffprobe_path: string;
   error: string;
+  providers?: {
+    tts: { primary: { provider: string; base_url: string; reachable: boolean }; fallback: { provider: string; base_url: string; reachable: boolean } | null; edge_available: boolean };
+    music: { provider: string; base_url: string; reachable: boolean };
+  };
+}
+
+// ── 时间轴（PLAN §4.3）──────────────────────────────
+
+export interface TimelineTransition {
+  type: string;
+  duration: number;
+}
+
+export interface TimelineMotion {
+  type: "kenburns" | "static";
+  from_zoom?: number;
+  to_zoom?: number;
+  pan?: "none" | "left" | "right" | "up" | "down";
+}
+
+export interface TimelineVideoSegment {
+  asset_id: string;
+  duration: number;
+  trim_in?: number;
+  transition_in?: TimelineTransition;
+  motion?: TimelineMotion;
+}
+
+export interface TimelineAudioTrack {
+  role: "narration" | "bgm";
+  asset_id: string;
+  start: number;
+  duration: number;
+  gain?: number;
+  fade_in?: number;
+  fade_out?: number;
+  loop?: boolean;
+}
+
+export interface TimelineSubtitle {
+  start: number;
+  end: number;
+  text: string;
+  style?: string;
+}
+
+export interface Timeline {
+  version: number;
+  preset: string;
+  tracks: {
+    video: TimelineVideoSegment[];
+    audio: TimelineAudioTrack[];
+    subtitles: TimelineSubtitle[];
+  };
+}
+
+export interface ComposerProject {
+  project_id: string;
+  title: string;
+  script: string;
+  timeline: Timeline;
+  asset_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComposerProjectListResponse {
+  projects: ComposerProject[];
+}
+
+export interface ComposerTTSResponse {
+  asset: ComposerAsset;
+  duplicated: boolean;
+  provider: string;
+}
+
+export interface ComposerMusicResponse {
+  asset: ComposerAsset;
+  duplicated: boolean;
 }
 
 /** 应用基本信息（来自 GET /） */

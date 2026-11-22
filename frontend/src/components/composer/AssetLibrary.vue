@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { importComposerAssetUrl, uploadComposerAsset } from "../../api/client";
+import {
+  generateComposerMusic,
+  generateComposerTts,
+  importComposerAssetUrl,
+  uploadComposerAsset,
+} from "../../api/client";
 import {
   COMPOSER_DELETE_CONFIRM,
   COMPOSER_KIND_ICONS,
@@ -13,9 +18,17 @@ import {
   UI_ASSET_NO_ASSETS,
   UI_ASSET_UPLOAD,
   UI_ASSET_URL_PLACEHOLDER,
+  UI_BGM_GENERATE,
+  UI_BGM_PANEL,
+  UI_BGM_STYLE_PLACEHOLDER,
   UI_COMPOSER_FFMPEG_MISSING,
   UI_DELETE,
+  UI_GENERATING,
   UI_OPEN_IN_NEW_TAB,
+  UI_TTS_GENERATE,
+  UI_TTS_PANEL,
+  UI_TTS_TEXT_PLACEHOLDER,
+  UI_TTS_VOICE,
 } from "../../constants";
 import {
   composerAssets,
@@ -23,6 +36,9 @@ import {
   composerFfmpegAvailable,
   composerFfmpegError,
   composerKindFilter,
+  composerTtsDefaultVoice,
+  composerTtsVoices,
+  parseComposerError,
   refreshComposerAssets,
   removeComposerAsset,
 } from "../../composables/useComposer";
@@ -100,6 +116,58 @@ async function handleUpload(e: Event): Promise<void> {
     importError.value = e instanceof Error ? e.message : String(e);
   } finally {
     uploading.value = false;
+  }
+}
+
+// ── TTS / BGM 快捷生成 ────────────────────────────
+
+const ttsOpen = ref(false);
+const bgmOpen = ref(false);
+const ttsText = ref("");
+const ttsVoice = ref("");
+const ttsBusy = ref(false);
+const bgmStyle = ref("");
+const bgmDuration = ref(11);
+const bgmBusy = ref(false);
+const genNotice = ref("");
+const genError = ref("");
+
+async function handleTts(): Promise<void> {
+  const text = ttsText.value.trim();
+  if (!text || ttsBusy.value) return;
+  ttsBusy.value = true;
+  genNotice.value = "";
+  genError.value = "";
+  try {
+    const resp = await generateComposerTts({
+      text,
+      voice: ttsVoice.value || composerTtsDefaultVoice.value || undefined,
+    });
+    genNotice.value = resp.duplicated ? UI_ASSET_DEDUP_HIT : `旁白已入库（${resp.provider}）`;
+    ttsText.value = "";
+    await refreshComposerAssets();
+  } catch (e) {
+    genError.value = parseComposerError(e).join("\n");
+  } finally {
+    ttsBusy.value = false;
+  }
+}
+
+async function handleBgm(): Promise<void> {
+  const style = bgmStyle.value.trim();
+  if (!style || bgmBusy.value) return;
+  bgmBusy.value = true;
+  genNotice.value = "";
+  genError.value = "";
+  try {
+    const resp = await generateComposerMusic({ style, duration: bgmDuration.value });
+    genNotice.value = resp.duplicated ? UI_ASSET_DEDUP_HIT : "背景音乐已入库";
+    bgmStyle.value = "";
+    await refreshComposerAssets();
+  } catch (e) {
+    genError.value = parseComposerError(e).join("\n");
+  } finally {
+    bgmBusy.value = false;
   }
 }
 
@@ -191,6 +259,53 @@ function probeSummary(asset: ComposerAsset): string {
         <i class="fa-solid fa-triangle-exclamation"></i>
         {{ UI_COMPOSER_FFMPEG_MISSING }}
       </p>
+    </div>
+
+    <!-- TTS / BGM 快捷生成 -->
+    <div class="al-gen">
+      <button class="al-gen-head" @click="ttsOpen = !ttsOpen">
+        <i class="fa-solid fa-microphone"></i>
+        {{ UI_TTS_PANEL }}
+        <i class="fa-solid al-gen-chevron" :class="ttsOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+      </button>
+      <div v-if="ttsOpen" class="al-gen-body">
+        <textarea v-model="ttsText" class="al-gen-textarea" rows="2" :placeholder="UI_TTS_TEXT_PLACEHOLDER" />
+        <div class="al-gen-row">
+          <label class="al-gen-voice">
+            <span>{{ UI_TTS_VOICE }}</span>
+            <select v-model="ttsVoice">
+              <option value="">{{ composerTtsDefaultVoice || "默认" }}</option>
+              <option v-for="v in composerTtsVoices" :key="v" :value="v">{{ v }}</option>
+            </select>
+          </label>
+          <button class="al-btn al-btn--primary" :disabled="ttsBusy || !ttsText.trim()" @click="handleTts">
+            <i v-if="ttsBusy" class="fa-solid fa-spinner fa-spin"></i>
+            {{ ttsBusy ? UI_GENERATING : UI_TTS_GENERATE }}
+          </button>
+        </div>
+      </div>
+
+      <button class="al-gen-head" @click="bgmOpen = !bgmOpen">
+        <i class="fa-solid fa-music"></i>
+        {{ UI_BGM_PANEL }}
+        <i class="fa-solid al-gen-chevron" :class="bgmOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+      </button>
+      <div v-if="bgmOpen" class="al-gen-body">
+        <input v-model="bgmStyle" class="al-url-input al-gen-style" :placeholder="UI_BGM_STYLE_PLACEHOLDER" @keydown.enter="handleBgm" />
+        <div class="al-gen-row">
+          <label class="al-gen-voice">
+            <span>时长（秒）</span>
+            <input v-model.number="bgmDuration" type="number" min="1" max="60" />
+          </label>
+          <button class="al-btn al-btn--primary" :disabled="bgmBusy || !bgmStyle.trim()" @click="handleBgm">
+            <i v-if="bgmBusy" class="fa-solid fa-spinner fa-spin"></i>
+            {{ bgmBusy ? UI_GENERATING : UI_BGM_GENERATE }}
+          </button>
+        </div>
+      </div>
+
+      <p v-if="genError" class="al-msg al-msg--error al-gen-msg">{{ genError }}</p>
+      <p v-else-if="genNotice" class="al-msg al-gen-msg">{{ genNotice }}</p>
     </div>
 
     <!-- 类型过滤 -->
@@ -309,9 +424,86 @@ function probeSummary(asset: ComposerAsset): string {
 .al-upload-limit { font-size: 11px; color: var(--text-dim); }
 .al-file-input { display: none; }
 
-.al-msg { margin: 0; font-size: 12px; color: var(--success); }
+.al-msg { margin: 0; font-size: 12px; color: var(--success); white-space: pre-wrap; }
 .al-msg--error { color: var(--error); }
 .al-msg--warn { color: var(--warning); }
+
+/* ── TTS / BGM 快捷生成 ── */
+
+.al-gen {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.al-gen-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 3px 2px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.al-gen-head:hover { color: var(--text-primary); }
+.al-gen-chevron { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+
+.al-gen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0 2px;
+}
+
+.al-gen-textarea {
+  padding: 6px 9px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+}
+.al-gen-textarea:focus { border-color: var(--accent); }
+
+.al-gen-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.al-gen-voice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.al-gen-voice select,
+.al-gen-voice input {
+  padding: 5px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  outline: none;
+}
+.al-gen-voice select:focus,
+.al-gen-voice input:focus { border-color: var(--accent); }
+
+.al-gen-style { flex: 1; }
+.al-gen-msg { font-size: 11px; }
 
 /* ── 过滤 ── */
 
