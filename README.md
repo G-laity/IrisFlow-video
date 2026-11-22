@@ -1,8 +1,8 @@
 # IrisFlow
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
-[![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.37.0-green)]()
+[![Status](https://img.shields.io/badge/状态-GA-brightgreen)]()
+[![Version](https://img.shields.io/badge/版本-0.38.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -145,7 +145,7 @@ edge-tts（免费、需联网），音乐可上传现成 BGM。
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.37.0",...}
+# → {"name":"IrisFlow","version":"0.38.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -187,6 +187,9 @@ curl http://localhost:8000/api/health
 | `/api/composer/renders/{id}/file` | GET | 成品 MP4 流式播放（Range）/ `?download=1` 下载 |
 | `/api/composer/status-stream` | GET | 合成器事件流（SSE：素材 / 项目变更） |
 | `/api/composer/config` | GET / PUT | 合成器配置 + ffmpeg / TTS / 音乐 provider 探测 |
+| `/api/composer/templates` | GET | 项目模板（产品介绍 / 口播 / 图文混排） |
+| `/api/composer/maintenance/usage` | GET | 磁盘占用快照（上限 / 目标水位 / 自动清理开关） |
+| `/api/composer/maintenance/cleanup` | POST | 手动执行磁盘 LRU 回收（未引用素材 → 旧渲染产物） |
 
 ## 📂 项目结构
 
@@ -220,6 +223,7 @@ IrisFlow/
 │   │   ├── timeline.py           #   时间轴 Schema 校验 + SRT 生成 + 引用提取
 │   │   ├── tts.py                #   语音合成（三级降级链 + 长文本分句 + 多说话人对话）
 │   │   ├── music.py              #   背景音乐生成（Stable Audio sidecar）
+│   │   ├── maintenance.py        #   磁盘占用快照 + LRU 回收（未引用素材 / 旧渲染）
 │   │   ├── ffmpeg.py             #   ffmpeg 探测 + 分段渲染 / xfade / Ken Burns / ASS 字幕 / 混音命令 + 进度解析
 │   │   ├── queue.py              #   渲染队列：FIFO + worker + 状态机 + 取消 / 优雅关闭
 │   │   └── router.py             #   REST + SSE 路由（素材 / 项目 / 渲染 / 配置 / 状态流）
@@ -246,7 +250,8 @@ IrisFlow/
 │   │       │   ├── AssetLibrary.vue      #     素材库 — 网格 + 过滤 + 上传/导入 + TTS/BGM 快捷生成
 │   │       │   ├── ProjectList.vue       #     项目列表 — 新建（标题 + 脚本）+ 选择 + 删除
 │   │       │   ├── StoryboardEditor.vue  #     分镜编辑器 — 镜头卡片 + 字幕列表 + 旁白/BGM 轨（PATCH 即存）
-│   │       │   └── RenderQueue.vue       #     渲染队列 — 进度条 + 状态灯 + 取消 + 成品预览/下载
+│   │       │   ├── RenderQueue.vue       #     渲染队列 — 进度条 + 状态灯 + 取消 + 成品预览/下载
+│   │       │   └── TimelineTracks.vue    #     轨道式时间轴 — 标尺 + 播放头预览 + 拖拽重排
 │   │       ├── ChatPanel.vue      #     聊天面板 — 消息滚动 + 会话加载
 │   │       ├── ChatInput.vue      #     输入框 — 工具切换 + 思考开关 + 文件上传
 │   │       ├── MessageBubble.vue  #     消息气泡 — Markdown 渲染 + 思考过程
@@ -336,7 +341,9 @@ graph TD
 - ✅ **M2 · 时间轴 + 编排 + 语音/音乐生成（0.35.0）**：时间轴 Schema 校验 + SRT 生成、项目 CRUD 与引用计数、Agent 八工具集（项目 / 素材导入 / Agnes 轮询入库 / TTS / BGM / 时间轴 / 渲染占位）、TTS 三级降级（CosyVoice sidecar → 云端 → edge-tts）、Stable Audio BGM、分镜编辑器（镜头 / 字幕 / 旁白 / BGM，PATCH 即存）、素材页 TTS/BGM 快捷生成、本地模型 sidecar 部署脚本（deploy/）
 - ✅ **M3 · 渲染 MVP（0.36.0）**：分段渲染 + concat 拼接 + SRT 字幕烧录 + 旁白/BGM 混音、渲染队列与状态机、SSE 实时进度、取消（杀进程）、成品 MP4 预览/下载、磁盘水位告警、重启中断恢复
 - ✅ **M4 · 高级合成（0.37.0）**：xfade 转场（fade / dissolve / slide）、Ken Burns 运镜（zoom + pan）、ASS 样式字幕（默认 / 大字 / 顶部 / 简约）、旁白侧链压 BGM、TTS 长文本自动分句与多说话人对话、编码参数可配置（preset / crf / 码率）
-- ⬜ **M5 · 体验完善（0.38.0）**：轨道式时间轴 / 项目模板 / 磁盘 LRU 回收
+- ✅ **M5 · 体验完善（0.38.0，GA）**：轨道式时间轴（标尺 / 播放头预览 / 拖拽重排）、项目模板（产品介绍 / 口播 / 图文混排）、磁盘 LRU 回收（手动 + 水位自动）、对话工具结果「发送到合成器」、渲染完成 toast
+
+> 🎉 **IRIS VIDEO COMPOSER 五个里程碑（M1-M5）全部完成，特性标记 GA（0.38.0）**。
 
 ## 📄 许可证
 

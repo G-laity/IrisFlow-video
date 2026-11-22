@@ -14,6 +14,8 @@ from llm.constants import (
     COMPOSER_DISK_LIMIT_BYTES,
     COMPOSER_PRESETS,
     COMPOSER_RENDER_CONCURRENCY,
+    DISK_CLEANUP_DEFAULT_ENABLED,
+    DISK_CLEANUP_TARGET_RATIO,
     ENCODING_AUDIO_BITRATE_DEFAULT,
     ENCODING_CRF_DEFAULT,
     ENCODING_PRESET_DEFAULT,
@@ -36,6 +38,8 @@ KEY_PRESETS = "presets"
 KEY_TTS = "tts"
 KEY_MUSIC = "music"
 KEY_ENCODING = "encoding"
+KEY_DISK_CLEANUP_ENABLED = "disk_cleanup_enabled"
+KEY_DISK_CLEANUP_TARGET_RATIO = "disk_cleanup_target_ratio"
 
 ENCODING_DEFAULTS: dict[str, object] = {
     "preset": ENCODING_PRESET_DEFAULT,
@@ -95,6 +99,13 @@ def _int_or(value: object, default: int) -> int:
         return default
 
 
+def _float_or(value: object, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 # ── 运行期值（模块级缓存，apply 时更新）────────────────────
 
 _ffmpeg_path = str(_persisted.get(KEY_FFMPEG_PATH, ""))
@@ -122,6 +133,12 @@ def _merge_defaults(defaults: dict[str, object], raw: object) -> dict[str, objec
 _tts_cfg: dict[str, object] = _merge_defaults(TTS_DEFAULTS, _persisted.get(KEY_TTS))
 _music_cfg: dict[str, object] = _merge_defaults(MUSIC_DEFAULTS, _persisted.get(KEY_MUSIC))
 _encoding_cfg: dict[str, object] = _merge_defaults(ENCODING_DEFAULTS, _persisted.get(KEY_ENCODING))
+_disk_cleanup_enabled: bool = bool(
+    _persisted.get(KEY_DISK_CLEANUP_ENABLED, DISK_CLEANUP_DEFAULT_ENABLED)
+)
+_disk_cleanup_target_ratio: float = _float_or(
+    _persisted.get(KEY_DISK_CLEANUP_TARGET_RATIO), DISK_CLEANUP_TARGET_RATIO
+)
 
 
 def get_ffmpeg_path() -> str:
@@ -159,6 +176,16 @@ def get_encoding() -> dict[str, object]:
     return json.loads(json.dumps(_encoding_cfg, ensure_ascii=False))
 
 
+def get_disk_cleanup_enabled() -> bool:
+    """是否启用磁盘水位自动清理。"""
+    return _disk_cleanup_enabled
+
+
+def get_disk_cleanup_target_ratio() -> float:
+    """自动清理目标水位（上限的比例）。"""
+    return _disk_cleanup_target_ratio
+
+
 def resolve_secret(text: str) -> str:
     """解析 ${VAR} 密钥引用（复用全局密钥库）。"""
     from core.config import resolve_secret_text  # 延迟导入避免循环
@@ -175,6 +202,8 @@ def snapshot() -> dict[str, object]:
         KEY_TTS: get_tts(),
         KEY_MUSIC: get_music(),
         KEY_ENCODING: get_encoding(),
+        KEY_DISK_CLEANUP_ENABLED: _disk_cleanup_enabled,
+        KEY_DISK_CLEANUP_TARGET_RATIO: _disk_cleanup_target_ratio,
     }
 
 
@@ -184,7 +213,7 @@ def apply(updates: dict[str, object]) -> dict[str, object]:
     仅接受已知键；非法类型回退到默认值。
     """
     global _ffmpeg_path, _disk_limit_bytes, _render_concurrency, _presets, _tts_cfg, _music_cfg
-    global _encoding_cfg
+    global _encoding_cfg, _disk_cleanup_enabled, _disk_cleanup_target_ratio
     if KEY_FFMPEG_PATH in updates:
         _ffmpeg_path = str(updates[KEY_FFMPEG_PATH] or "").strip()
     if KEY_TTS in updates and isinstance(updates[KEY_TTS], dict):
@@ -193,6 +222,12 @@ def apply(updates: dict[str, object]) -> dict[str, object]:
         _music_cfg = _merge_defaults(_music_cfg, updates[KEY_MUSIC])
     if KEY_ENCODING in updates and isinstance(updates[KEY_ENCODING], dict):
         _encoding_cfg = _merge_defaults(_encoding_cfg, updates[KEY_ENCODING])
+    if KEY_DISK_CLEANUP_ENABLED in updates:
+        _disk_cleanup_enabled = bool(updates[KEY_DISK_CLEANUP_ENABLED])
+    if KEY_DISK_CLEANUP_TARGET_RATIO in updates:
+        _disk_cleanup_target_ratio = min(
+            0.95, max(0.3, _float_or(updates[KEY_DISK_CLEANUP_TARGET_RATIO], DISK_CLEANUP_TARGET_RATIO))
+        )
     if KEY_DISK_LIMIT_BYTES in updates:
         _disk_limit_bytes = max(100 * 1024 * 1024, _int_or(updates[KEY_DISK_LIMIT_BYTES], COMPOSER_DISK_LIMIT_BYTES))
     if KEY_RENDER_CONCURRENCY in updates:

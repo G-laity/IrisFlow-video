@@ -458,6 +458,19 @@ class ComposerStore:
             conn.close()
         return await self.get_render(render_id)
 
+    async def delete_render(self, render_id: str) -> dict[str, object] | None:
+        """删除渲染记录（磁盘清理时使用，调用方负责删除文件）。"""
+        render = await self.get_render(render_id)
+        if render is None:
+            return None
+        async with self._lock:
+            conn = _get_db()
+            conn.execute("DELETE FROM renders WHERE render_id = ?", (render_id,))
+            conn.commit()
+            conn.close()
+        _log.info("渲染记录删除: %s", render_id)
+        return render
+
     async def has_active_render(self, project_id: str) -> bool:
         renders = await self.list_renders(project_id)
         return any(str(r["state"]) in RENDER_ACTIVE_STATES for r in renders)

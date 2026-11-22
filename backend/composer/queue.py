@@ -22,6 +22,7 @@ from llm.constants import (
     MB_BYTES,
     MSG_RENDER_ALREADY_ACTIVE,
     MSG_RENDER_CANCEL_REQUESTED,
+    MSG_DISK_CLEANUP_DONE,
     MSG_RENDER_DISK_WARN,
     MSG_RENDER_FFMPEG_MISSING,
     MSG_RENDER_INTERRUPTED,
@@ -513,16 +514,27 @@ class RenderQueue:
     async def _check_disk_watermark(self) -> None:
         used = composer_assets.disk_usage_bytes()
         limit = composer_config.get_disk_limit_bytes()
-        if used > limit:
-            try:
-                from composer.router import broadcast_warn
+        if used <= limit:
+            return
+        try:
+            from composer.router import broadcast_warn
 
-                await broadcast_warn(MSG_RENDER_DISK_WARN.format(
-                    used=round(used / (1024 * MB_BYTES), 2),
-                    limit=round(limit / (1024 * MB_BYTES), 2),
-                ))
-            except Exception:
-                pass
+            await broadcast_warn(MSG_RENDER_DISK_WARN.format(
+                used=round(used / (1024 * MB_BYTES), 2),
+                limit=round(limit / (1024 * MB_BYTES), 2),
+            ))
+            if composer_config.get_disk_cleanup_enabled():
+                from composer import maintenance
+
+                result = await maintenance.run_cleanup(force=False)
+                if not result.get("skipped"):
+                    await broadcast_warn(MSG_DISK_CLEANUP_DONE.format(
+                        freed=round(_to_float(result.get("freed_bytes")) / MB_BYTES, 1),
+                        assets=result.get("deleted_assets", 0),
+                        renders=result.get("deleted_renders", 0),
+                    ))
+        except Exception:
+            pass
 
 
 render_queue = RenderQueue()

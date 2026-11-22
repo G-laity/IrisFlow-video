@@ -299,6 +299,41 @@ MSG_RENDER_NOT_FOUND = "渲染任务不存在"
 MSG_RENDER_CANCEL_REQUESTED = "已请求取消"
 MSG_RENDER_DISK_WARN = "合成器存储占用 {used} GB，已超过上限 {limit} GB，请清理素材或渲染产物。"
 
+# ── 项目模板（M5）───────────────────────────────────────
+
+PROJECT_TEMPLATES: list[dict[str, str]] = [
+    {
+        "id": "product",
+        "name": "产品介绍",
+        "description": "3 镜头产品展示：开场全景 → 细节特写 → 功能演示，横屏 16:9",
+        "preset": "720p16x9",
+        "script": "镜头1（3s）：产品外观全景，配一句品牌旁白。\n镜头2（4s）：核心细节特写，Ken Burns 缓慢推进。\n镜头3（5s）：功能使用场景，字幕点出关键卖点。\n结尾 BGM 渐弱收束。",
+    },
+    {
+        "id": "talking",
+        "name": "口播视频",
+        "description": "单镜头人物口播 + 全程字幕，竖屏 9:16，适合短视频平台",
+        "preset": "1080p9x16",
+        "script": "单镜头固定机位，人物正面口播。\n旁白：按脚本逐句合成，字幕与语音对齐。\nBGM 低音量铺底，旁白出现时自动压低。",
+    },
+    {
+        "id": "image_text",
+        "name": "图文混排",
+        "description": "图片轮播 + 字幕说明，横屏 16:9，适合知识/图文类内容",
+        "preset": "720p16x9",
+        "script": "每张图片 3-4s，Ken Burns 轻微缩放或平移。\n字幕说明每张图的核心信息（大字样式）。\n旁白与字幕同步，BGM 轻量铺底。",
+    },
+]
+
+# ── 磁盘 LRU 回收（M5）──────────────────────────────────
+
+DISK_CLEANUP_DEFAULT_ENABLED = False
+DISK_CLEANUP_TARGET_RATIO = 0.8       # 清理到上限的 80%
+MSG_DISK_CLEANUP_DONE = (
+    "磁盘清理完成：释放 {freed} MB，删除未引用素材 {assets} 个、旧渲染产物 {renders} 个。"
+)
+MSG_DISK_CLEANUP_SKIPPED = "磁盘占用低于目标水位，无需清理。"
+
 # 素材 MIME 白名单：扩展名 → (kind, Content-Type)
 COMPOSER_MEDIA_EXTS: dict[str, tuple[str, str]] = {
     # 图片

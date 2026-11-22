@@ -7,6 +7,28 @@
 
 ## 待发布
 
+## 0.38.0
+
+### 添加
+- **视频合成器 M5：体验完善（GA）**（规划见 PLAN.md §11 M5）
+  - **轨道式时间轴**（`TimelineTracks.vue`）：时间标尺、播放头点击定位与素材预览（视频按播放头 seek）、视频块原生拖拽重排、旁白 / BGM / 字幕轨可视化；分镜编辑器新增「分镜 / 轨道」视图切换，共享同一 draft 与防抖保存
+  - **项目模板**：`GET /api/composer/templates` 提供产品介绍 / 口播 / 图文混排三套骨架（预设 + 脚本）；前端「从模板新建」自动填充并设置分辨率预设
+  - **磁盘 LRU 回收**（`composer/maintenance.py`）：未引用素材（按创建时间升序）→ 旧渲染产物，清理至 `limit × target_ratio`；手动 `POST /maintenance/cleanup` + 渲染完成水位自动清理（默认关闭，可配置开关与目标比例）；`GET /maintenance/usage` 占用快照
+  - **对话联动**：WorkflowDetail 工具结果中的媒体 URL 一键「发送到合成器」（自动识别 URL、去重复用）
+  - **渲染完成 toast**：SSE 收到 completed 时全局提示，点击打开合成器
+- 配置新增 `disk_cleanup_enabled` / `disk_cleanup_target_ratio`
+
+### 变更
+- `RenderQueue` 增加「清理磁盘」按钮与结果提示
+- README 状态徽章标记 **GA**，功能特性与里程碑全部完成
+
+### 文档
+- **README**：API 表补 templates / maintenance 端点、项目结构补 `maintenance.py` / `TimelineTracks.vue`、M5 与 GA 标记
+- **CLAUDE.md / PLAN.md**：版本与里程碑状态同步（M1-M5 完成，GA）
+
+> 本版本同时标志着 IRIS VIDEO COMPOSER（0.34.0 → 0.38.0）五个里程碑全部交付：
+> 素材管线 → 时间轴与语音/音乐 → 渲染 MVP → 高级合成 → 体验完善。
+
 ## 0.37.0
 
 ### 添加

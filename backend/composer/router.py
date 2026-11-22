@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from composer import config as composer_config
 from composer import assets as composer_assets
 from composer import ffmpeg as composer_ffmpeg
+from composer import maintenance as composer_maintenance
 from composer import music as composer_music
 from composer import timeline as composer_timeline
 from composer import tts as composer_tts
@@ -27,6 +28,9 @@ from composer.queue import render_queue
 from composer.store import composer_store
 from llm.constants import (
     COMPOSER_KIND_AUDIO,
+    MSG_DISK_CLEANUP_DONE,
+    MSG_DISK_CLEANUP_SKIPPED,
+    PROJECT_TEMPLATES,
     COMPOSER_KIND_IMAGE,
     COMPOSER_KIND_VIDEO,
     COMPOSER_MEDIA_EXTS,
@@ -587,6 +591,39 @@ async def composer_status_stream():
                 _subscribers.remove(queue)
 
     return StreamingResponse(_stream(), media_type=SSE_MEDIA_TYPE)
+
+
+# ── 项目模板 / 磁盘维护（M5）──────────────────────────────
+
+
+@router.get("/templates")
+async def list_templates():
+    """项目模板列表（前端「从模板新建」）。"""
+    return {"templates": PROJECT_TEMPLATES}
+
+
+@router.get("/maintenance/usage")
+async def maintenance_usage():
+    """磁盘占用快照（用于告警与清理界面）。"""
+    return await composer_maintenance.usage_snapshot()
+
+
+@router.post("/maintenance/cleanup")
+async def maintenance_cleanup():
+    """手动执行磁盘 LRU 回收（未引用素材 → 旧渲染产物）。"""
+    from llm.constants import MB_BYTES
+
+    result = await composer_maintenance.run_cleanup(force=True)
+    if result.get("skipped"):
+        message = MSG_DISK_CLEANUP_SKIPPED
+    else:
+        message = MSG_DISK_CLEANUP_DONE.format(
+            freed=round(float(str(result.get("freed_bytes") or 0)) / MB_BYTES, 1),
+            assets=result.get("deleted_assets", 0),
+            renders=result.get("deleted_renders", 0),
+        )
+    await broadcast_warn(message)
+    return {**result, "message": message}
 
 
 # ── 配置与探测 ────────────────────────────────────────────
