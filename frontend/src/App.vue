@@ -191,6 +191,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     class="floating-toggle floating-toggle--tl"
     @click="showWindow('conversations')"
     :title="UI_SESSION_LIST"
+    :aria-label="UI_SESSION_LIST"
   >
     <i class="fa-solid fa-bars"></i>
   </button>
@@ -200,6 +201,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     class="floating-toggle floating-toggle--tr2"
     @click="showWindow('composer')"
     :title="UI_COMPOSER"
+    :aria-label="UI_COMPOSER"
   >
     <i class="fa-solid fa-clapperboard"></i>
   </button>
@@ -209,6 +211,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     class="floating-toggle floating-toggle--tr"
     @click="showWindow('settings')"
     :title="UI_SETTINGS"
+    :aria-label="UI_SETTINGS"
   >
     <i class="fa-solid fa-gear"></i>
   </button>
@@ -218,6 +221,8 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     <button
       v-if="composerToast"
       class="app-toast"
+      role="status"
+      aria-live="polite"
       @click="showComposer = true; clearComposerToast()"
     >
       <i class="fa-solid fa-circle-check"></i>

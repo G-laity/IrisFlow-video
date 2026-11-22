@@ -287,7 +287,7 @@ const headerIcon = computed(() => {
     @close="emit('close')"
   >
     <template v-if="mediaUrl" #actions>
-      <button class="btn-icon" :title="UI_SEND_TO_COMPOSER" :disabled="sending" @click.stop="sendToComposer">
+      <button class="btn-icon" :title="UI_SEND_TO_COMPOSER" :aria-label="UI_SEND_TO_COMPOSER" :disabled="sending" @click.stop="sendToComposer">
         <i :class="sending ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-clapperboard'"></i>
       </button>
     </template>
@@ -341,7 +341,7 @@ const headerIcon = computed(() => {
 
       <!-- ── 原始数据 ─────────────────────────── -->
       <div v-if="hasRawData" class="info-block">
-        <button class="raw-toggle" @click="showRaw = !showRaw">
+        <button class="raw-toggle" :aria-expanded="showRaw" @click="showRaw = !showRaw">
           <i class="fa-solid" :class="showRaw ? 'fa-chevron-down' : 'fa-chevron-right'" />
           {{ UI_RAW_DATA }}
         </button>

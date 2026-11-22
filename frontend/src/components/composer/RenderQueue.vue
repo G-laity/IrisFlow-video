@@ -14,6 +14,7 @@ import {
   UI_RENDER_START,
   UI_RENDER_SUBMIT_FAILED,
   UI_RENDER_WARN,
+  UI_REFRESH,
 } from "../../constants";
 import {
   cancelComposerRenderItem,
@@ -141,7 +142,7 @@ watch(() => props.projectId, refresh);
         <i :class="cleaning ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-broom'"></i>
         {{ UI_CLEANUP_DISK }}
       </button>
-      <button class="rq-btn" @click="refresh">
+      <button class="rq-btn" @click="refresh" :title="UI_REFRESH" :aria-label="UI_REFRESH">
         <i class="fa-solid fa-rotate"></i>
       </button>
     </div>

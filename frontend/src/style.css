@@ -75,6 +75,27 @@ button {
   font-size: inherit;
 }
 
+/* ── 键盘焦点可见（无障碍）──────────────────────────── */
+
+:is(button, a, input, textarea, select, [tabindex]):focus-visible {
+  /* !important：覆盖组件内 input { outline: none } 的局部规则 */
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* ── 尊重系统「减弱动效」设置 ───────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── 全局 Markdown 渲染规则（MessageBubble / MediaPreview / WorkflowDetail 共用）── */
 
 .markdown-content p {
@@ -180,7 +201,12 @@ button {
   padding: 0;
 }
 .circle-btn-lg:hover { background: var(--bg-hover); color: var(--text-secondary); border-color: var(--text-dim); }
-.circle-btn-lg.on { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.circle-btn-lg.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: 0 0 10px var(--accent-shadow);
+}
 
 input,
 textarea,

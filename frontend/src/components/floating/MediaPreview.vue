@@ -105,10 +105,10 @@ const rawText = computed(() => {
     @close="emit('close')"
   >
     <template v-if="resourceUrl || payload.kind === 'file'" #actions>
-      <a v-if="resourceUrl" class="btn-icon" :href="resourceUrl" target="_blank" rel="noopener" :title="UI_OPEN_IN_NEW_TAB" @click.stop>
+      <a v-if="resourceUrl" class="btn-icon" :href="resourceUrl" target="_blank" rel="noopener" :title="UI_OPEN_IN_NEW_TAB" :aria-label="UI_OPEN_IN_NEW_TAB" @click.stop>
         <i class="fa-solid fa-arrow-up-right-from-square"></i>
       </a>
-      <button v-if="payload.kind === 'file'" class="btn-icon" :title="UI_DOWNLOAD" @click.stop="handleDownload">
+      <button v-if="payload.kind === 'file'" class="btn-icon" :title="UI_DOWNLOAD" :aria-label="UI_DOWNLOAD" @click.stop="handleDownload">
         <i class="fa-solid fa-download"></i>
       </button>
     </template>
@@ -162,7 +162,7 @@ const rawText = computed(() => {
 
       <!-- 原始数据 toggle -->
       <div v-if="rawText" class="info-block">
-        <button class="raw-toggle" @click="showRaw = !showRaw">
+        <button class="raw-toggle" :aria-expanded="showRaw" @click="showRaw = !showRaw">
           <i class="fa-solid" :class="showRaw ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
           原始数据
         </button>

@@ -220,6 +220,9 @@ function clampToViewport() {
     <div
       ref="panelEl"
       class="fw-panel"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="title || undefined"
       :class="{ 'fw-panel--show': show, 'fw-panel--pinned': pinned, 'fw-panel--dragging': dragging }"
       :style="{ width, zIndex }"
     >
@@ -242,10 +245,11 @@ function clampToViewport() {
             :class="{ on: pinned }"
             @click.stop="togglePin"
             :title="pinned ? UI_UNPIN : UI_PIN"
+            :aria-label="pinned ? UI_UNPIN : UI_PIN"
           >
             <i class="fa-solid fa-thumbtack" />
           </button>
-          <button class="btn-icon fw-close-btn" @click.stop="close" :title="UI_CLOSE">
+          <button class="btn-icon fw-close-btn" @click.stop="close" :title="UI_CLOSE" :aria-label="UI_CLOSE">
             <i class="fa-solid fa-xmark" />
           </button>
         </div>
@@ -275,8 +279,12 @@ function clampToViewport() {
 
   position: fixed;
   max-height: 80vh;
+  /* 玻璃拟态：半透明 + 模糊，保留实色回退 */
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
   border-radius: var(--radius-lg);
   box-shadow: var(--fw-shadow);
   display: flex;
@@ -284,10 +292,13 @@ function clampToViewport() {
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  /* 独立 transform 属性：与定位用 inline transform 叠加，不冲突 */
+  translate: 0 8px;
+  scale: 0.98;
+  transition: opacity 0.2s ease, translate 0.2s ease, scale 0.2s ease;
 
   /* 状态 */
-  &.fw-panel--show { opacity: 1; pointer-events: auto; }
+  &.fw-panel--show { opacity: 1; pointer-events: auto; translate: 0 0; scale: 1; }
   &.fw-panel--pinned { border-color: var(--accent); box-shadow: var(--fw-shadow), var(--fw-glow); }
   &.fw-panel--dragging { transition: none; }
 }

@@ -319,6 +319,7 @@ defineExpose({
         <template v-for="msg in agent.messages.value" :key="msg.id">
           <WorkflowLog
             v-if="msg.role === ROLE_ASSISTANT && (msg.workflowLog?.length || !!msg.content || !msg.streamDone || msg.aborted || msg.queued)"
+            class="msg-enter"
             :entries="msg.workflowLog"
             :stream-done="msg.streamDone"
             :has-content="!!msg.content"
@@ -329,6 +330,7 @@ defineExpose({
           />
           <MessageBubble
             v-if="msg.role === ROLE_USER || msg.role === ROLE_ASSISTANT"
+            class="msg-enter"
             :msg="msg"
             @preview="(p) => emit('preview', p)"
           />
@@ -390,6 +392,15 @@ defineExpose({
   display: flex;
   flex-direction: column;
   min-height: 100%;
+}
+
+.msg-enter {
+  animation: msg-in 0.22s ease both;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; translate: 0 4px; }
+  to   { opacity: 1; translate: 0 0; }
 }
 
 .chat-scroll {

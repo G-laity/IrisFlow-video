@@ -324,10 +324,12 @@ async function save() {
   >
     <div class="settings-layout">
       <!-- 左侧标签栏 -->
-      <nav class="tab-nav">
+      <nav class="tab-nav" role="tablist">
         <button
           v-for="tab in tabs" :key="tab.id"
           class="tab-btn"
+          role="tab"
+          :aria-selected="activeTab === tab.id"
           :class="{ active: activeTab === tab.id }"
           @click="activeTab = tab.id"
         >

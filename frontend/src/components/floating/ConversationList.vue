@@ -512,9 +512,10 @@ async function handleCleanUp() {
         <template v-for="group in groupedConversations" :key="group.label">
           <div class="group-label">{{ group.label }}</div>
           <div
-            v-for="conv in group.items"
+            v-for="(conv, idx) in group.items"
             :key="conv.session_id"
             class="conv-item"
+            :style="{ '--i': idx }"
             :class="{ active: conv.session_id === currentSessionId, flash: flashedIds.has(conv.session_id) }"
             @click="router.push('/chat/' + conv.session_id)"
             @mousedown.middle.prevent="handleDelete(conv.session_id)"
@@ -532,7 +533,13 @@ async function handleCleanUp() {
             </template>
             <template v-else>
               <div class="conv-info">
-                <i class="conv-status-dot" :class="statusColor(conv.status)" :title="statusTitle(conv.status)"></i>
+                <i
+                  class="conv-status-dot"
+                  :class="statusColor(conv.status)"
+                  :title="statusTitle(conv.status)"
+                  role="img"
+                  :aria-label="statusTitle(conv.status)"
+                ></i>
                 <i v-if="conv.pinned" class="pin-indicator fa-solid fa-thumbtack"></i>
                 <span class="conv-title" @dblclick.stop="startRename(conv)">
                   {{ conv.title }}
@@ -544,6 +551,9 @@ async function handleCleanUp() {
                   :class="{ open: menuOpenId === conv.session_id }"
                   @click.stop="openMenu(conv.session_id)"
                   :title="UI_MORE"
+                  :aria-label="UI_MORE"
+                  aria-haspopup="menu"
+                  :aria-expanded="menuOpenId === conv.session_id"
                 >
                   <i class="fa-solid fa-ellipsis"></i>
                 </button>
@@ -616,6 +626,8 @@ async function handleCleanUp() {
 }
 
 .conv-item {
+  animation: conv-in 0.25s ease both;
+  animation-delay: calc(min(var(--i, 0), 12) * 30ms);
   display: flex;
   align-items: center;
   padding: 8px 10px;
@@ -654,7 +666,16 @@ async function handleCleanUp() {
   background: var(--success);
 }
 .conv-status-dot.idle        { background: var(--success); }                              /* 绿色 — 可发送 */
-.conv-status-dot.generating  { background: var(--status-generating); animation: pulse-dot 1.2s infinite; }
+.conv-status-dot.generating  {
+  background: var(--status-generating);
+  animation: pulse-dot 1.2s infinite;
+  box-shadow: 0 0 6px var(--status-generating);
+}
+
+@keyframes conv-in {
+  from { opacity: 0; translate: 0 4px; }
+  to   { opacity: 1; translate: 0 0; }
+}
 .conv-status-dot.pending     { background: var(--status-pending); }
 .conv-status-dot.unknown     { background: var(--status-unknown); }
 @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
