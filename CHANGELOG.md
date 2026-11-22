@@ -7,6 +7,13 @@
 
 ## 待发布
 
+## 0.38.1
+
+### 修复
+- **Windows 下渲染秒失败且错误为空**：后端运行在 SelectorEventLoop 时，`asyncio.create_subprocess_exec` 不受支持（抛出空消息 `NotImplementedError`），导致渲染在 preparing 前即失败、`error` 为空、无 ffmpeg 日志。`composer/ffmpeg.py` 的 `run_ffmpeg` 与 `probe_media` 改为 `subprocess.Popen` / `subprocess.run` + 线程读取 stdout/stderr（与 MCP 子进程实现一致），兼容任意事件循环；进度回调经 `loop.call_soon_threadsafe` 回投
+- **取消逻辑适配**：`composer/queue.py` 子进程类型改为 `subprocess.Popen`，取消等待改用 `asyncio.to_thread(proc.wait)`，terminate → 宽限 → kill 行为不变
+- **空错误诊断**：渲染失败日志增加 `exc_info=True`，同类异常可直接看到完整堆栈
+
 ## 0.38.0
 
 ### 添加

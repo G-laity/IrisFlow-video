@@ -10,7 +10,9 @@ import asyncio
 import json
 import logging
 import shutil
+import subprocess
 import sys
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -112,21 +114,22 @@ async def probe_media(file_path: str) -> dict[str, object]:
         "-show_streams",
         file_path,
     ]
+
+    def _run() -> tuple[int, bytes, bytes]:
+        # 用 subprocess.run + 线程，兼容 Windows SelectorEventLoop
+        completed = subprocess.run(
+            cmd, capture_output=True, timeout=COMPOSER_PROBE_TIMEOUT, check=False
+        )
+        return completed.returncode, completed.stdout, completed.stderr
+
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=COMPOSER_PROBE_TIMEOUT
-        )
-    except asyncio.TimeoutError:
+        returncode, stdout, stderr = await asyncio.to_thread(_run)
+    except subprocess.TimeoutExpired:
         raise RuntimeError("ffprobe 探测超时") from None
     except OSError as e:
         raise RuntimeError(f"ffprobe 启动失败: {e}") from None
 
-    if proc.returncode != 0:
+    if returncode != 0:
         tail = stderr.decode("utf-8", errors="replace").strip()[-300:]
         raise RuntimeError(f"ffprobe 探测失败: {tail or '未知错误'}")
 
@@ -424,63 +427,82 @@ async def run_ffmpeg(
     cwd: Path | None = None,
     log_path: Path | None = None,
     on_progress: Callable[[float], None] | None = None,
-    register_proc: Callable[[asyncio.subprocess.Process | None], None] | None = None,
+    register_proc: Callable[[subprocess.Popen[str] | None], None] | None = None,
 ) -> None:
     """执行 ffmpeg 命令并解析 `-progress pipe:1` 输出。
 
+    Windows 上后端可能运行在 SelectorEventLoop（asyncio 子进程不可用），
+    因此统一使用 subprocess.Popen + 线程读取 stdout/stderr，兼容任意事件循环。
     Args 的最后一项必须是输出路径（本函数在输出前插入 progress 参数）。
     失败时抛 RuntimeError（含 stderr 尾部），完整 stderr 写入 log_path。
     """
     cmd = args[:-1] + ["-progress", "pipe:1", "-nostats", args[-1]]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         cwd=str(cwd) if cwd else None,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
     if register_proc:
         register_proc(proc)
-    stderr_chunks: list[str] = []
 
-    async def _drain_stderr() -> None:
-        assert proc.stderr is not None
-        while True:
-            chunk = await proc.stderr.readline()
-            if not chunk:
-                break
-            stderr_chunks.append(chunk.decode("utf-8", errors="replace"))
+    loop = asyncio.get_running_loop()
+    stderr_tail: list[str] = []
+    stderr_size = 0
+    stderr_lock = threading.Lock()
 
-    stderr_task = asyncio.create_task(_drain_stderr())
-    try:
+    def _read_stdout() -> None:
         assert proc.stdout is not None
-        while True:
-            line = await proc.stdout.readline()
-            if not line:
-                break
-            text = line.decode("utf-8", errors="replace").strip()
+        for line in proc.stdout:
+            text = line.strip()
             if not text or "=" not in text:
                 continue
             key, _, value = text.partition("=")
             if key in ("out_time_us", "out_time_ms") and duration and on_progress:
                 try:
                     seconds = float(value) / 1_000_000
-                    on_progress(max(0.0, min(1.0, seconds / duration)))
+                    frac = max(0.0, min(1.0, seconds / duration))
+                    loop.call_soon_threadsafe(on_progress, frac)
                 except ValueError:
                     pass
             elif key == "progress" and value == "end" and on_progress:
-                on_progress(1.0)
-        returncode = await proc.wait()
+                loop.call_soon_threadsafe(on_progress, 1.0)
+
+    def _read_stderr() -> None:
+        nonlocal stderr_size
+        assert proc.stderr is not None
+        for line in proc.stderr:
+            with stderr_lock:
+                stderr_tail.append(line)
+                stderr_size += len(line)
+                while stderr_size > 4000 and stderr_tail:
+                    stderr_size -= len(stderr_tail.pop(0))
+
+    threads = [
+        threading.Thread(target=_read_stdout, daemon=True),
+        threading.Thread(target=_read_stderr, daemon=True),
+    ]
+    for t in threads:
+        t.start()
+    try:
+        returncode = await asyncio.to_thread(proc.wait)
+        for t in threads:
+            t.join(timeout=2.0)
     finally:
-        await stderr_task
         if register_proc:
             register_proc(None)
 
-    stderr_text = "".join(stderr_chunks)
+    with stderr_lock:
+        stderr_text = "".join(stderr_tail)
     if log_path is not None:
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
             with open(log_path, "a", encoding="utf-8") as f:
-                f.write(" ".join(cmd) + "\n" + stderr_text + "\n")
+                f.write(chr(10).join([" ".join(cmd), stderr_text, ""]))
         except OSError as e:
             _log.warning("写入渲染日志失败: %s", e)
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -74,7 +75,7 @@ class RenderQueue:
     def __init__(self) -> None:
         self._queue: asyncio.Queue[str] = asyncio.Queue()
         self._workers: list[asyncio.Task[None]] = []
-        self._procs: dict[str, asyncio.subprocess.Process] = {}
+        self._procs: dict[str, subprocess.Popen[str]] = {}
         self._live: dict[str, dict[str, object]] = {}
         self._cancel: set[str] = set()
         self._last_emit: dict[str, float] = {}
@@ -163,7 +164,7 @@ class RenderQueue:
             except ProcessLookupError:
                 pass
             try:
-                await asyncio.wait_for(proc.wait(), timeout=RENDER_CANCEL_GRACE)
+                await asyncio.wait_for(asyncio.to_thread(proc.wait), timeout=RENDER_CANCEL_GRACE)
             except asyncio.TimeoutError:
                 try:
                     proc.kill()
@@ -215,7 +216,7 @@ class RenderQueue:
                 await self._finish(render_id, RENDER_CANCELED, MSG_RENDER_CANCEL_REQUESTED)
                 _log.info("渲染已取消: %s", render_id)
             else:
-                _log.warning("渲染失败 %s: %s", render_id, e)
+                _log.warning("渲染失败 %s: %s", render_id, e, exc_info=True)
                 await self._finish(render_id, RENDER_FAILED, str(e)[:2000])
         finally:
             self._procs.pop(render_id, None)
@@ -454,7 +455,7 @@ class RenderQueue:
 
     # ── 辅助 ─────────────────────────────────────────
 
-    def _register_proc(self, render_id: str, proc: asyncio.subprocess.Process | None) -> None:
+    def _register_proc(self, render_id: str, proc: subprocess.Popen[str] | None) -> None:
         if proc is None:
             self._procs.pop(render_id, None)
         else:
