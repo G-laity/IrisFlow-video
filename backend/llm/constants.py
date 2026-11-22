@@ -149,6 +149,8 @@ COMPOSER_KIND_UNKNOWN = "unknown"
 
 COMPOSER_SOURCE_UPLOAD = "upload"       # 本地上传
 COMPOSER_SOURCE_URL = "url"             # URL 导入
+COMPOSER_SOURCE_TTS = "tts"             # 语音合成
+COMPOSER_SOURCE_MUSIC = "music"         # 音乐生成
 
 COMPOSER_MAX_UPLOAD_SIZE = 500 * MB_BYTES  # 素材上传 / URL 下载上限（500 MB）
 COMPOSER_DISK_LIMIT_BYTES = 5 * 1024 * MB_BYTES  # data/composer 磁盘水位上限（5 GB，M3 告警）
@@ -159,8 +161,57 @@ COMPOSER_HASH_CHUNK = 1024 * 1024       # sha256 分块大小（1 MB）
 COMPOSER_STREAM_CHUNK = 1024 * 1024     # Range 流式响应分块大小（1 MB）
 
 COMPOSER_SSE_ASSET = "composer_asset"       # SSE：素材入库 / 删除
+COMPOSER_SSE_PROJECT = "composer_project"   # SSE：项目创建 / 更新 / 删除
 COMPOSER_SSE_CONNECTED = "composer_connected"  # SSE：连接快照
 COMPOSER_SSE_HEARTBEAT = 15.0                # composer SSE 心跳间隔（秒）
+
+# ── 时间轴 Schema（composer/timeline.py）───────────────────
+
+TIMELINE_VERSION = 1
+TRACK_VIDEO = "video"
+TRACK_AUDIO = "audio"
+TRACK_SUBTITLES = "subtitles"
+ROLE_NARRATION = "narration"
+ROLE_BGM = "bgm"
+MOTION_KENBURNS = "kenburns"
+MOTION_STATIC = "static"
+PAN_NONE = "none"
+PAN_LEFT = "left"
+PAN_RIGHT = "right"
+PAN_UP = "up"
+PAN_DOWN = "down"
+TRANSITION_FADE = "fade"       # M3 实现；M2 仅校验存储
+IMAGE_MIN_DURATION = 0.5       # 图片镜头最短时长（秒）
+IMAGE_MAX_DURATION = 30.0      # 图片镜头最长时长（秒）
+SUBTITLE_STYLE_DEFAULT = "default"
+SRT_TIMESTAMP_FORMAT = "%02d:%02d:%02d,%03d"
+
+# ── TTS / 音乐生成（composer/tts.py / music.py）────────────
+
+TTS_PROVIDER_LOCAL = "local-http"
+TTS_PROVIDER_OPENAI = "openai-compat"
+TTS_PROVIDER_EDGE = "edge"
+TTS_DEFAULT_PORT = 9701
+MUSIC_DEFAULT_PORT = 9702
+TTS_HTTP_TIMEOUT = 120.0             # 语音合成超时（秒）
+MUSIC_HTTP_TIMEOUT = 300.0           # 音乐生成超时（秒）—— CPU 生成 ~11s 片段需要较长窗口
+PROVIDER_PROBE_TIMEOUT = 2.0         # provider 连通探测超时（秒）
+TTS_OUTPUT_FORMAT = "mp3"
+TTS_SPEECH_PATH = "/audio/speech"
+TTS_HEALTH_PATH = "/health"
+MUSIC_GENERATE_PATH = "/audio/generate"
+MUSIC_DEFAULT_DURATION = 11
+MUSIC_OUTPUT_FORMAT = "mp3"
+MSG_TTS_UNAVAILABLE = "语音服务不可用。请启动 CosyVoice sidecar（deploy/cosyvoice）或配置云端 TTS。"
+MSG_MUSIC_UNAVAILABLE = "音乐生成服务不可用。请启动 Stable Audio sidecar（deploy/stable-audio），或直接上传/导入 BGM 素材。"
+MSG_RENDER_NOT_READY = "渲染功能即将上线（M3），时间轴已保存。"
+MSG_COMPOSER_GROUP = "合成器"
+
+# ── 项目（composer/store.py）───────────────────────────────
+
+PROJECT_DEFAULT_TITLE = "未命名项目"
+AGNES_VIDEO_POLL_INTERVAL = 1.5      # Agnes 视频状态轮询间隔（秒）
+AGNES_VIDEO_POLL_MAX = 600.0         # Agnes 视频状态最长等待（秒）
 
 # 素材 MIME 白名单：扩展名 → (kind, Content-Type)
 COMPOSER_MEDIA_EXTS: dict[str, tuple[str, str]] = {

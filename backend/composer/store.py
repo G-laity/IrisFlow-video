@@ -18,6 +18,8 @@ from pathlib import Path
 from llm.constants import (
     COMPOSER_ID_LENGTH,
     COMPOSER_ID_PREFIX_ASSET,
+    COMPOSER_ID_PREFIX_PROJECT,
+    PROJECT_DEFAULT_TITLE,
     SQLITE_BUSY_TIMEOUT,
 )
 
@@ -82,6 +84,32 @@ def _get_db() -> sqlite3.Connection:
 _ASSET_COLS = (
     "asset_id, kind, source, url, file_path, sha256, size_bytes, probe, meta, ref_count, created_at"
 )
+
+
+_PROJECT_COLS = "project_id, title, script, timeline, asset_ids, created_at, updated_at"
+
+
+def _parse_json_obj(raw: object, fallback: object) -> object:
+    text = raw if isinstance(raw, str) else ""
+    try:
+        return json.loads(text) if text else fallback
+    except (json.JSONDecodeError, TypeError):
+        return fallback
+
+
+def _row_to_project(row: tuple[object, ...]) -> dict[str, object]:
+    project_id, title, script, timeline, asset_ids, created_at, updated_at = row
+    timeline_obj = _parse_json_obj(timeline, {})
+    ids_obj = _parse_json_obj(asset_ids, [])
+    return {
+        "project_id": project_id,
+        "title": title,
+        "script": script,
+        "timeline": timeline_obj if isinstance(timeline_obj, dict) else {},
+        "asset_ids": [str(x) for x in ids_obj] if isinstance(ids_obj, list) else [],
+        "created_at": created_at,
+        "updated_at": updated_at,
+    }
 
 
 def _row_to_asset(row: tuple[object, ...]) -> dict[str, object]:
@@ -232,10 +260,95 @@ class ComposerStore:
             conn.close()
             return int(row[0]) if row else 0
 
-    # ── 预留（M2/M3 启用）─────────────────────────────
+    # ── 项目（M2）─────────────────────────────────────
 
-    def _new_id(self, prefix: str) -> str:
-        return prefix + uuid.uuid4().hex[:COMPOSER_ID_LENGTH]
+    async def create_project(
+        self,
+        title: str = PROJECT_DEFAULT_TITLE,
+        script: str = "",
+        timeline: dict[str, object] | None = None,
+        asset_ids: list[str] | None = None,
+    ) -> dict[str, object]:
+        project_id = COMPOSER_ID_PREFIX_PROJECT + uuid.uuid4().hex[:COMPOSER_ID_LENGTH]
+        now = time.time()
+        async with self._lock:
+            conn = _get_db()
+            conn.execute(
+                """INSERT INTO projects
+                   (project_id, title, script, timeline, asset_ids, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (project_id, title, script,
+                 json.dumps(timeline or {}, ensure_ascii=False),
+                 json.dumps(asset_ids or [], ensure_ascii=False),
+                 now, now),
+            )
+            conn.commit()
+            conn.close()
+        project = await self.get_project(project_id)
+        assert project is not None
+        _log.info("项目创建: %s title=%s", project_id, title)
+        return project
+
+    async def get_project(self, project_id: str) -> dict[str, object] | None:
+        async with self._lock:
+            conn = _get_db()
+            row = conn.execute(
+                f"SELECT {_PROJECT_COLS} FROM projects WHERE project_id = ?", (project_id,)
+            ).fetchone()
+            conn.close()
+            return _row_to_project(row) if row else None
+
+    async def list_projects(self) -> list[dict[str, object]]:
+        async with self._lock:
+            conn = _get_db()
+            rows = conn.execute(
+                f"SELECT {_PROJECT_COLS} FROM projects ORDER BY updated_at DESC"
+            ).fetchall()
+            conn.close()
+            return [_row_to_project(r) for r in rows]
+
+    async def update_project(
+        self,
+        project_id: str,
+        title: str | None = None,
+        script: str | None = None,
+        timeline: dict[str, object] | None = None,
+        asset_ids: list[str] | None = None,
+    ) -> dict[str, object] | None:
+        """更新项目字段（None = 保持不变），返回更新后的项目。"""
+        existing = await self.get_project(project_id)
+        if existing is None:
+            return None
+        new_title = title if title is not None else str(existing["title"])
+        new_script = script if script is not None else str(existing["script"])
+        new_timeline = timeline if timeline is not None else existing["timeline"]
+        new_ids = asset_ids if asset_ids is not None else existing["asset_ids"]
+        async with self._lock:
+            conn = _get_db()
+            conn.execute(
+                """UPDATE projects SET title = ?, script = ?, timeline = ?, asset_ids = ?, updated_at = ?
+                   WHERE project_id = ?""",
+                (new_title, new_script,
+                 json.dumps(new_timeline, ensure_ascii=False),
+                 json.dumps(new_ids, ensure_ascii=False),
+                 time.time(), project_id),
+            )
+            conn.commit()
+            conn.close()
+        _log.info("项目更新: %s", project_id)
+        return await self.get_project(project_id)
+
+    async def delete_project(self, project_id: str) -> dict[str, object] | None:
+        project = await self.get_project(project_id)
+        if project is None:
+            return None
+        async with self._lock:
+            conn = _get_db()
+            conn.execute("DELETE FROM projects WHERE project_id = ?", (project_id,))
+            conn.commit()
+            conn.close()
+        _log.info("项目删除: %s", project_id)
+        return project
 
 
 # 模块级单例

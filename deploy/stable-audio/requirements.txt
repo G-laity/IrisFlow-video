@@ -1,0 +1,10 @@
+# Stable Audio Open Small sidecar 依赖（CPU 可跑，GPU 更快）
+torch>=2.3
+torchaudio>=2.3
+fastapi>=0.115
+uvicorn>=0.30
+soundfile>=0.12
+numpy
+PyWavelets>=1.8
+pytorch-lightning>=2.0
+modelscope>=1.18

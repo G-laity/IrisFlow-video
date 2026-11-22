@@ -98,6 +98,11 @@ def _resolve_secrets(text: str) -> str:
     return _SUBSTITUTION_PATTERN.sub(_replacer, text)
 
 
+def resolve_secret_text(text: str) -> str:
+    """公开的 ${VAR} 替换入口（供其他模块调用，避免私有名跨模块引用）。"""
+    return _resolve_secrets(text)
+
+
 def get_secret(key: str) -> str | None:
     """按 key 查询单个密钥值（供 MCP 服务器等外部进程使用）。
 

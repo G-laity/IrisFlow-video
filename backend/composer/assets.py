@@ -147,6 +147,19 @@ async def _ingest(
         src, _ASSETS_DIR, ext, COMPOSER_MAX_UPLOAD_SIZE
     )
 
+    return await _ingest_hashed(sha256, size_bytes, tmp_path, ext, source, url, meta)
+
+
+async def _ingest_hashed(
+    sha256: str,
+    size_bytes: int,
+    tmp_path: Path,
+    ext: str,
+    source: str,
+    url: str = "",
+    meta: dict[str, object] | None = None,
+) -> tuple[dict[str, object], bool]:
+    """入库后半段：去重 → 判型 → 探测 → 入库。"""
     # hash 去重：命中直接复用已有素材（秒级返回）
     existing = await composer_store.find_by_sha256(sha256)
     if existing is not None:
@@ -209,6 +222,26 @@ async def import_from_url(url: str, kind: str | None = None) -> tuple[dict[str, 
                 # 显式指定 kind 仅作为判型提示，最终以探测为准
                 pass
             return await _ingest(resp, ext, COMPOSER_SOURCE_URL, url=url.strip())
+
+
+async def import_from_bytes(
+    data: bytes,
+    ext: str,
+    source: str,
+    meta: dict[str, object] | None = None,
+) -> tuple[dict[str, object], bool]:
+    """从内存字节入库（TTS / 音乐生成产物），复用去重 + 探测管线。"""
+    if not data:
+        raise ValueError("生成结果为空")
+    if len(data) > COMPOSER_MAX_UPLOAD_SIZE:
+        raise ValueError(f"生成结果超过大小上限（{COMPOSER_MAX_UPLOAD_SIZE // (1024 * 1024)} MB）")
+    if ext not in COMPOSER_MEDIA_EXTS:
+        raise ValueError(f"不支持的媒体类型: {ext}")
+    _ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp_path = _ASSETS_DIR / f".tmp_{uuid.uuid4().hex}{ext}"
+    tmp_path.write_bytes(data)
+    sha256 = hashlib.sha256(data).hexdigest()
+    return await _ingest_hashed(sha256, len(data), tmp_path, ext, source, "", meta)
 
 
 async def import_from_upload(file: UploadFile, filename: str) -> tuple[dict[str, object], bool]:

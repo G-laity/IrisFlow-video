@@ -1,10 +1,11 @@
 [project]
 name = "backend"
-version = "0.34.0"
+version = "0.35.0"
 description = "IrisFlow 后端服务 — LLM Chat + Agent 控制台"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "edge-tts>=7.3.1",
     "fastapi[standard]>=0.138.2",
     "httpx>=0.28.0",
     "markitdown[docx,pdf,pptx,xls,xlsx]>=0.1.6",

@@ -986,7 +986,7 @@ async def update_session_settings_default(body: dict[str, object]):
 
 # ── 工具组常量 ──────────────────────────────────────────
 
-BUILTIN_GROUP_NAME = "内置"
+BUILTIN_GROUP_NAME = "内置"  # Tool.group 为空的内置工具归入此组
 
 
 @router.get("/api/tools")
@@ -1000,10 +1000,12 @@ async def list_available_tools():
     from llm.tools import tool_executor, BUILTIN_TOOLS
     from llm.mcp import mcp_manager
 
-    builtin_names = sorted(t.name for t in BUILTIN_TOOLS)
     groups: dict[str, list[str]] = {}
-    if builtin_names:
-        groups[BUILTIN_GROUP_NAME] = builtin_names
+    for t in BUILTIN_TOOLS:
+        group_name = t.group or BUILTIN_GROUP_NAME
+        groups.setdefault(group_name, []).append(t.name)
+    for names in groups.values():
+        names.sort()
     groups.update(mcp_manager.get_server_tools())
 
     return {

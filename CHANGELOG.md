@@ -7,6 +7,32 @@
 
 ## 待发布
 
+## 0.35.0
+
+### 添加
+- **视频合成器 M2：时间轴 + 编排 + 语音/音乐生成**（规划见 PLAN.md）
+  - `composer/timeline.py`：时间轴 Schema 校验（逐字段中文错误，供 LLM 自纠）、SRT 生成、引用素材提取、空时间轴骨架；常量覆盖版本 / 轨道 / 角色 / 转场 / 运镜 / 图片时长范围
+  - 项目 CRUD：`GET/POST /api/composer/projects`、`GET/PATCH/DELETE /api/composer/projects/{id}`、`GET /projects/{id}/srt`；PATCH 时间轴先校验再入库，素材引用计数随项目增删同步
+  - 语音服务层 `composer/tts.py`：local-http（CosyVoice sidecar）→ openai-compat（云端）→ edge-tts 三级降级；`POST /api/composer/assets/tts`
+  - 音乐服务层 `composer/music.py`：Stable Audio sidecar；`POST /api/composer/assets/music`，不可用时返回引导信息不阻塞编排
+  - `composer/assets.py` 新增 `import_from_bytes`，TTS/BGM 产物复用 hash 去重 + ffprobe 探测管线
+  - Agent 八工具（`llm/tools/composer.py`）：创建项目 / URL 导入 / Agnes 轮询入库 / TTS / BGM / 写入时间轴 / 渲染占位 ×2；`Tool.group` 分组机制，`/api/tools` 新增「合成器」工具组
+  - 前端：`ProjectList.vue`（新建/选择/删除）、`StoryboardEditor.vue`（镜头卡片 + 字幕列表 + 旁白/BGM 轨，600ms 防抖 PATCH，Agent 外部更新自动同步）、`AssetLibrary` TTS/BGM 快捷生成、`ComposerPanel` 启用项目与时间轴标签页
+  - 部署 `deploy/`：CosyVoice 2.5 / Stable Audio Open Small sidecar 安装与启动脚本（国内源、uv 缓存硬链接、Python 3.10 自动安装、Windows 兼容补丁、默认提示音色）
+
+### 变更
+- `GET/PUT /api/composer/config` 增加 TTS / 音乐 provider 连通探测（2s 超时）
+- 前端 `useComposer` 扩展项目状态 + `composer_project` SSE 本地 upsert；`client.ts` composer 命名空间补 projects / tts / music
+- `constants.py` / `constants.ts`：时间轴、provider、工具组、引导文案与 UI 文案常量
+
+### 修复
+- **Windows sidecar 兼容**（全部固化进 `deploy/` 脚本，详见 `download.md`）：matcha Cython 扩展免编译（源码内置）、pyworld 可选导入、`torchaudio.load` 改 soundfile、whisper 升级 20250625、torch 降级后重新锁定 cu128、PyWavelets/numpy 2 兼容、rf_denoiser 采样器改 pingpong、numpy 2 随机数溢出规避
+
+### 文档
+- **download.md**：完整下载清单（版本 / 国内源 / 校验值）、实测磁盘占用、Windows 兼容问题与处理表
+- **deploy/README.md**：sidecar 部署步骤、国内源表、目录约定、前置条件、实测占用
+- **README**：API 一览补项目/TTS/BGM/SRT 端点、项目结构更新、下一步计划标记 M1/M2 完成
+
 ## 0.34.0
 
 ### 添加

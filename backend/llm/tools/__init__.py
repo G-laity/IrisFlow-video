@@ -26,8 +26,10 @@ logger = logging.getLogger(__name__)
 from llm.tools.web_search import WebSearchTool
 from llm.tools.calculator import CalculatorTool
 from llm.tools.open_url import OpenUrlTool
+from llm.tools.composer import COMPOSER_TOOLS
 
 BUILTIN_TOOLS: list[Tool] = [
+    *COMPOSER_TOOLS,
     WebSearchTool(),
     CalculatorTool(),
     OpenUrlTool(),

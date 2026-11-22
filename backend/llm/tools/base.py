@@ -42,6 +42,7 @@ class Tool(ABC):
     icon: str = "fa-solid fa-wrench"   # Font Awesome 图标类
     label: str = ""                     # 中文显示名（空则回退到 name）
     order: float = 100.0                # 排序权重（越小越靠左）
+    group: str = ""                     # 工具组名（空 = 「内置」组）
 
     @property
     def name(self) -> str:
