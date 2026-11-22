@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-GA-brightgreen)]()
-[![Version](https://img.shields.io/badge/版本-0.39.0-green)]()
+[![Version](https://img.shields.io/badge/版本-0.39.1-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -160,7 +160,7 @@ cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.39.0",...}
+# → {"name":"IrisFlow","version":"0.39.1",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health

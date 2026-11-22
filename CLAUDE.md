@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.39.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
+IrisFlow v0.39.1 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
 
 ## 命令
 

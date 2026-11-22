@@ -7,6 +7,12 @@
 
 ## 待发布
 
+## 0.39.1
+
+### 修复
+- **Markdown 消息段落"隔行"**：`MessageBubble` 的 `.content` 使用 `white-space: pre-wrap`，该规则同时作用于 Markdown 渲染容器，导致 markdown-it 输出的 HTML 标签间源码换行被渲染为额外空行。Markdown 容器改为 `white-space: normal`，纯文本消息仍保留 `pre-wrap`
+- **段距/行距可读性**：Markdown 行高调整为 1.7、段落间距 8px、列表间距 4px/2px，标题上下间距 14px/6px；纯文本行高同步为 1.7
+
 ## 0.39.0
 
 ### 添加
