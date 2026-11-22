@@ -9,6 +9,7 @@
 
 /* ── Variables ───────────────────────────────────────── */
 :root {
+  color-scheme: dark;
   --bg-primary: #0f1117;
   --bg-secondary: #161822;
   --bg-tertiary: #1e2030;
@@ -43,6 +44,11 @@
   --overlay-bg: color-mix(in srgb, var(--bg-primary) 92%, transparent);
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 4px 48px rgba(0, 0, 0, 0.45);
+  --glass-highlight: rgba(255, 255, 255, 0.18);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-sheen: rgba(255, 255, 255, 0.10);
+  --glass-sheen-strong: rgba(255, 255, 255, 0.20);
+  --glass-bg: color-mix(in srgb, var(--bg-secondary) 48%, transparent);
   --status-generating: #f0c040;
   --status-pending: #e45a3c;
   --status-unknown: #6c7a8d;
@@ -50,6 +56,61 @@
   --radius-sm: 4px;
   --radius-lg: 12px;
   --font-mono: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+}
+
+
+/* ── 浅色主题 ───────────────────────────────────────── */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg-primary: #f6f7fb;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #eef0f7;
+  --bg-hover: #e6e9f2;
+  --border: #cfd4e3;
+  --text-primary: #1a1f2e;
+  --text-secondary: #4d5468;
+  --text-dim: #7c839a;
+  --accent: #4b5bd6;
+  --accent-hover: #3d4bc4;
+  --accent-bg: rgba(75, 91, 214, 0.10);
+  --accent-bg-subtle: rgba(75, 91, 214, 0.05);
+  --accent-bg-mid: rgba(75, 91, 214, 0.08);
+  --accent-strong: rgba(75, 91, 214, 0.28);
+  --accent-shadow: rgba(75, 91, 214, 0.16);
+  --error: #cf3d3d;
+  --error-bg: rgba(207, 61, 61, 0.07);
+  --error-bg-hover: rgba(207, 61, 61, 0.11);
+  --error-border: rgba(207, 61, 61, 0.22);
+  --code-bg: #f1f3f9;
+  --success: #17864c;
+  --warning: #a16207;
+  --white: #ffffff;
+  --white-03: rgba(0, 0, 0, 0.025);
+  --white-04: rgba(0, 0, 0, 0.035);
+  --white-12: rgba(0, 0, 0, 0.10);
+  --white-18: rgba(0, 0, 0, 0.15);
+  --white-20: rgba(0, 0, 0, 0.18);
+  --white-55: rgba(0, 0, 0, 0.55);
+  --white-85: rgba(0, 0, 0, 0.85);
+  --white-95: rgba(0, 0, 0, 0.95);
+  --shadow-sm: 0 1px 3px rgba(24, 35, 70, 0.08);
+  --shadow-md: 0 16px 48px rgba(24, 35, 70, 0.14);
+  --glass-highlight: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(24, 35, 70, 0.18);
+  --glass-sheen: rgba(255, 255, 255, 0.35);
+  --glass-sheen-strong: rgba(255, 255, 255, 0.65);
+  --glass-bg: color-mix(in srgb, var(--bg-secondary) 68%, transparent);
+  --status-generating: #a16207;
+  --status-pending: #c2410c;
+  --status-unknown: #7c839a;
+}
+
+/* 浅色页面加一层极淡的品牌渐变，避免大面积纯灰显得平 */
+html[data-theme="light"] body {
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(75, 91, 214, 0.06), transparent 60%),
+    radial-gradient(900px 500px at 90% 0%, rgba(45, 212, 191, 0.05), transparent 55%),
+    var(--bg-primary);
 }
 
 /* ── Base ────────────────────────────────────────────── */
@@ -77,11 +138,36 @@ button {
 
 /* ── 键盘焦点可见（无障碍）──────────────────────────── */
 
-:is(button, a, input, textarea, select, [tabindex]):focus-visible {
-  /* !important：覆盖组件内 input { outline: none } 的局部规则 */
+/* 按钮 / 链接 / 通用可聚焦元素：保留全局键盘焦点描边 */
+:is(button, a, [tabindex]):focus-visible {
   outline: 2px solid var(--accent) !important;
   outline-offset: 2px;
 }
+
+/* 复选框 / 单选框 / 滑块：原生控件外观需要描边辅助 */
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible,
+input[type="range"]:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+/* 文本类控件：已有 :focus { border-color } 反馈，不再叠加描边（避免双重边框） */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none !important;
+}
+
+/* ── 主题切换：圆形扩散（View Transitions）────────────── */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 2; }
 
 /* ── 尊重系统「减弱动效」设置 ───────────────────────── */
 
@@ -99,22 +185,22 @@ button {
 /* ── 全局 Markdown 渲染规则（MessageBubble / MediaPreview / WorkflowDetail 共用）── */
 
 .markdown-content {
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 .markdown-content p {
-  margin: 0 0 8px;
+  margin: 0 0 16px;
 }
 .markdown-content p:last-child {
   margin-bottom: 0;
 }
 .markdown-content ul,
 .markdown-content ol {
-  margin: 4px 0;
+  margin: 8px 0;
   padding-left: 18px;
 }
 .markdown-content li {
-  margin: 2px 0;
+  margin: 4px 0;
 }
 
 .markdown-content h1,
@@ -123,7 +209,7 @@ button {
 .markdown-content h4,
 .markdown-content h5,
 .markdown-content h6 {
-  margin: 14px 0 6px;
+  margin: 22px 0 10px;
   line-height: 1.35;
 }
 
@@ -379,4 +465,27 @@ select {
 .code-copy-btn.copied {
   color: var(--success);
   border-color: var(--success);
+}
+
+/* 代码复制成功提示（固定定位，避免被 pre 的 overflow 裁剪） */
+.copy-toast-fixed {
+  position: fixed;
+  z-index: 10000;
+  transform: translate(-50%, -100%) translateY(-4px);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--success);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.copy-toast-fixed.show {
+  opacity: 1;
+  transform: translate(-50%, -100%) translateY(-8px);
 }

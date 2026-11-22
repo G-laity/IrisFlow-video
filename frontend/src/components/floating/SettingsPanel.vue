@@ -2,9 +2,11 @@
 import { ref, computed, watch, inject, onUnmounted } from "vue";
 import FloatingWindow from "./FloatingWindow.vue";
 import { getLLMConfig, getHealth, updateLLMConfig, getConcurrencyConfig, getMCPConfig, updateMCPConfig, getSecrets, updateSecrets, getVersionInfo, getServerUrl, setServerUrl, isConnectionError, getRuntimeStatus, getMCPStatus, getDefaultSessionSettings, updateDefaultSessionSettings } from "../../api/client";
-import { DEFAULT_MAX_CONCURRENT, MAX_CONCURRENT_UPPER, FACTORY_SESSION_DEFAULTS, HEALTH_STATUS_LABEL, MCP_STATUS_LABEL, UI_CLEAR, UI_CLOSE, UI_SAVE, UI_SAVING, UI_SAVE_FAILED, UI_DEFAULT, UI_REFRESH, UI_TAB_SERVER, UI_TAB_LLM, UI_TAB_MCP, UI_TAB_SECRETS, UI_TAB_DEFAULTS, UI_TAB_ABOUT, UI_SERVER_ADDRESS, UI_MCP_SERVERS, UI_LLM_GATEWAY, UI_STATUS_LABEL, UI_UNCONFIGURED, UI_FETCH_FAILED, UI_NO_MCP_SERVERS, UI_MCP_CONFIG_DESC, UI_CONCURRENCY_LIMIT, UI_RUNTIME_INFO, UI_GATEWAY_URL, UI_MODEL_LABEL, UI_AUTH_TOKEN, UI_MAX_CONCURRENT_LABEL, UI_SECRETS_VARS, UI_SECRETS_DESC, UI_ADD_VARIABLE, UI_KEEP_UNCHANGED, UI_ENTER_SECRET_VALUE } from "../../constants";
+import { DEFAULT_MAX_CONCURRENT, MAX_CONCURRENT_UPPER, FACTORY_SESSION_DEFAULTS, HEALTH_STATUS_LABEL, MCP_STATUS_LABEL, THEME_OPTIONS, UI_CLEAR, UI_CLOSE, UI_SAVE, UI_SAVING, UI_SAVE_FAILED, UI_DEFAULT, UI_REFRESH, UI_TAB_APPEARANCE, UI_THEME, UI_THEME_DESC, UI_TAB_SERVER, UI_TAB_LLM, UI_TAB_MCP, UI_TAB_SECRETS, UI_TAB_DEFAULTS, UI_TAB_ABOUT, UI_SERVER_ADDRESS, UI_MCP_SERVERS, UI_LLM_GATEWAY, UI_STATUS_LABEL, UI_UNCONFIGURED, UI_FETCH_FAILED, UI_NO_MCP_SERVERS, UI_MCP_CONFIG_DESC, UI_CONCURRENCY_LIMIT, UI_RUNTIME_INFO, UI_GATEWAY_URL, UI_MODEL_LABEL, UI_AUTH_TOKEN, UI_MAX_CONCURRENT_LABEL, UI_SECRETS_VARS, UI_SECRETS_DESC, UI_ADD_VARIABLE, UI_KEEP_UNCHANGED, UI_ENTER_SECRET_VALUE } from "../../constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_DEFAULT_SETTINGS_KEY } from "../../composables/injectionKeys";
 import { discoverTools as refreshTools } from "../../composables/toolMetadata";
+import { themeMode, setTheme } from "../../composables/useTheme";
+import { useTabIndicator } from "../../composables/useTabIndicator";
 import type { LLMConfig, HealthResult, VersionInfo, RuntimeStatus, MCPStatusResult } from "../../types/api";
 
 interface SavedSettings {
@@ -37,10 +39,12 @@ const tabs: Tab[] = [
   { id: "mcp", label: UI_TAB_MCP, icon: "fa-solid fa-plug" },
   { id: "secrets", label: UI_TAB_SECRETS, icon: "fa-solid fa-key" },
   { id: "defaults", label: UI_TAB_DEFAULTS, icon: "fa-solid fa-sliders" },
+  { id: "appearance", label: UI_TAB_APPEARANCE, icon: "fa-solid fa-palette" },
   { id: "about", label: UI_TAB_ABOUT, icon: "fa-solid fa-circle-info" },
 ];
 
 const activeTab = ref("server");
+const { navEl, indicatorEl, indicatorStyle } = useTabIndicator(activeTab);
 
 const serverUrl = ref(getServerUrl());
 
@@ -324,7 +328,8 @@ async function save() {
   >
     <div class="settings-layout">
       <!-- 左侧标签栏 -->
-      <nav class="tab-nav" role="tablist">
+      <nav ref="navEl" class="tab-nav" role="tablist">
+        <span ref="indicatorEl" class="tab-indicator" :style="indicatorStyle" aria-hidden="true"></span>
         <button
           v-for="tab in tabs" :key="tab.id"
           class="tab-btn"
@@ -347,6 +352,8 @@ async function save() {
 
       <!-- 右侧设置面板 -->
       <div class="tab-content">
+        <Transition name="tab-switch" mode="out-in">
+        <div :key="activeTab" class="tab-panel" role="tabpanel">
         <!-- 服务器 -->
         <template v-if="activeTab === 'server'">
           <!-- 服务器地址 -->
@@ -578,6 +585,29 @@ async function save() {
           </div>
         </template>
 
+        <!-- 外观 -->
+        <template v-if="activeTab === 'appearance'">
+          <div class="section">
+            <div class="label-row">
+              <span class="label"><i class="fa-solid fa-palette"></i>{{ UI_THEME }}</span>
+            </div>
+            <p class="desc">{{ UI_THEME_DESC }}</p>
+            <div class="theme-options">
+              <button
+                v-for="opt in THEME_OPTIONS"
+                :key="opt.id"
+                class="theme-option"
+                :class="{ active: themeMode === opt.id }"
+                :aria-pressed="themeMode === opt.id"
+                @click="setTheme(opt.id, $event)"
+              >
+                <i :class="opt.icon"></i>
+                <span>{{ opt.label }}</span>
+              </button>
+            </div>
+          </div>
+        </template>
+
         <!-- 关于 -->
         <template v-if="activeTab === 'about'">
           <div v-if="verInfo" class="section about-section">
@@ -611,6 +641,8 @@ async function save() {
             <p class="about-loading">加载中…</p>
           </div>
         </template>
+        </div>
+        </Transition>
       </div>
     </div>
 
@@ -683,6 +715,71 @@ async function save() {
   overflow-y: auto;
   padding: 20px 24px;
   min-width: 0;
+}
+
+/* 标签页切换：淡入 + 轻微侧滑 */
+.tab-panel {
+  min-height: 100%;
+}
+/* 标签选中框：滑动指示器 */
+.tab-nav {
+  position: relative;
+}
+
+.tab-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.tab-btn.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tab-indicator {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0;
+  background: var(--accent-bg-mid);
+  box-shadow: inset 2px 0 0 var(--accent);
+  transition:
+    top 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.15s ease;
+}
+
+.tab-indicator.no-anim {
+  transition: none !important;
+}
+
+/* 内容从左侧进入 */
+.tab-switch-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.tab-switch-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+
+.tab-switch-enter-active,
+.tab-switch-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tab-switch-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.tab-switch-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 
 .section {
@@ -948,6 +1045,41 @@ async function save() {
 }
 
 /* ── 关于 ──────────────────────────────────────── */
+
+.theme-options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.theme-option {
+  flex: 1;
+  min-width: 110px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 10px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.theme-option:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--text-dim);
+}
+
+.theme-option.active {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent);
+}
 
 .about-section {
   display: flex;

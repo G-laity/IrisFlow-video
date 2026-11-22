@@ -43,6 +43,7 @@ const emit = defineEmits<{
 }>();
 
 const input = ref("");
+const inputFocused = ref(false);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 const uploadFiles = ref<FileAttachment[]>([]);
 const uploading = ref(false);
@@ -267,20 +268,25 @@ function handleSend() {
       @update:settings="$emit('update:sessionSettings', $event)"
     />
     <!-- 文字输入 -->
-    <textarea
-      ref="textareaRef"
-      v-model="input"
-      class="input-area"
-      :placeholder="UI_INPUT_PLACEHOLDER"
-      rows="3"
-      :disabled="disabled"
-      @keydown.enter.exact.prevent="handleSend"
-      @input="
-        ($event.target as HTMLTextAreaElement).style.height = 'auto';
-        ($event.target as HTMLTextAreaElement).style.height =
-          ($event.target as HTMLTextAreaElement).scrollHeight + 'px';
-      "
-    />
+    <div class="input-field">
+      <textarea
+        ref="textareaRef"
+        v-model="input"
+        class="input-area"
+        :placeholder="UI_INPUT_PLACEHOLDER"
+        rows="3"
+        :disabled="disabled"
+        @focus="inputFocused = true"
+        @blur="inputFocused = false"
+        @keydown.enter.exact.prevent="handleSend"
+        @input="
+          ($event.target as HTMLTextAreaElement).style.height = 'auto';
+          ($event.target as HTMLTextAreaElement).style.height =
+            ($event.target as HTMLTextAreaElement).scrollHeight + 'px';
+        "
+      />
+      <span class="input-focus-line" :class="{ show: inputFocused }"></span>
+    </div>
 
     <!-- 工具栏 + 发送按钮 -->
     <div class="input-row">
@@ -357,10 +363,100 @@ function handleSend() {
 
 <style scoped>
 .input-card {
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
+  position: relative;
+  /* 液态玻璃：磨砂 + 背景折射（渐进增强）+ 流动高光 */
+  background: var(--bg-secondary);
+  background: var(--glass-bg);
+  backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  backdrop-filter: blur(18px) saturate(1.75) brightness(1.04) url(#liquid-glass-refraction);
+  -webkit-backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  border: 1px solid var(--glass-border);
   border-radius: 20px;
   overflow: hidden;
+  isolation: isolate;
+  box-shadow:
+    var(--shadow-sm),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 环境光缓慢漂移 */
+.input-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 12% -10%, var(--glass-sheen-strong), transparent 48%),
+    radial-gradient(90% 70% at 88% 120%, var(--glass-sheen), transparent 55%);
+  mix-blend-mode: screen;
+  opacity: 0.8;
+  animation: liquid-input-flow 20s ease-in-out infinite alternate;
+}
+
+/* 镜面扫光 */
+.input-card::after {
+  content: "";
+  position: absolute;
+  top: -80%;
+  bottom: -80%;
+  left: -40%;
+  right: -40%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 42%,
+    var(--glass-sheen) 50%,
+    transparent 58%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: liquid-input-sheen 14s ease-in-out infinite;
+}
+
+/* 内容在玻璃高光之上 */
+.input-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes liquid-input-flow {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.04); }
+}
+
+@keyframes liquid-input-sheen {
+  0%   { transform: translateX(-45%) rotate(0.001deg); opacity: 0; }
+  10%  { opacity: 0.45; }
+  60%  { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+  100% { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+}
+
+/* 聚焦时 textarea 底边强调线：从中心向两侧缓缓展开 */
+.input-field {
+  position: relative;
+}
+
+.input-focus-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+  box-shadow: 0 0 8px var(--accent-shadow);
+}
+
+.input-focus-line.show {
+  transform: scaleX(1);
+  opacity: 1;
 }
 
 .input-area {
@@ -378,6 +474,11 @@ function handleSend() {
 
 .input-area::placeholder {
   color: var(--text-dim);
+}
+
+/* 聚焦提示由 .input-card 底边线承担，避免与全局 focus-visible 描边叠加成两条蓝线 */
+.input-area:focus-visible {
+  outline: none !important;
 }
 
 .input-row {

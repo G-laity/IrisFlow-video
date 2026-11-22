@@ -10,6 +10,7 @@ import { getLLMConfig, ping, getServerUrl, setServerUrl } from "./api/client";
 import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_COMPOSER, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_CONVERSATION_LIST_KEY, REMOVE_SESSION_CACHE_KEY } from "./composables/injectionKeys";
 import { discoverTools } from "./composables/toolMetadata";
+import { preloadMarkdown } from "./utils/markdown";
 import { composerToast, clearComposerToast } from "./composables/useComposer";
 import type { WorkflowEntry, PreviewPayload } from "./types/api";
 
@@ -121,6 +122,8 @@ onMounted(() => {
   startHeartbeat();
   // 后台定期刷新 MCP 工具列表（覆盖健康检查自动重连等非手动触发场景）
   _toolTimer = setInterval(discoverTools, TOOL_REFRESH_INTERVAL);
+  // 空闲预加载 Markdown 重依赖（首屏不阻塞）
+  setTimeout(preloadMarkdown, 1200);
 });
 
 onUnmounted(() => {

@@ -279,14 +279,20 @@ function clampToViewport() {
 
   position: fixed;
   max-height: 80vh;
-  /* 玻璃拟态：半透明 + 模糊，保留实色回退 */
+  /* 液态玻璃：半透明磨砂 + 背景折射（渐进增强）+ 流动高光 */
   background: var(--bg-secondary);
-  background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
-  backdrop-filter: blur(14px) saturate(1.1);
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background: var(--glass-bg);
+  backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  /* 支持 url() backdrop 的浏览器叠加 SVG 折射；不支持的会忽略整条声明，保留上一行 */
+  backdrop-filter: blur(18px) saturate(1.75) brightness(1.04) url(#liquid-glass-refraction);
+  -webkit-backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--fw-shadow);
+  box-shadow:
+    var(--fw-shadow),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+  isolation: isolate;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -299,8 +305,69 @@ function clampToViewport() {
 
   /* 状态 */
   &.fw-panel--show { opacity: 1; pointer-events: auto; translate: 0 0; scale: 1; }
-  &.fw-panel--pinned { border-color: var(--accent); box-shadow: var(--fw-shadow), var(--fw-glow); }
+  &.fw-panel--pinned { border-color: var(--accent); box-shadow: var(--fw-shadow), var(--fw-glow), inset 0 1px 0 var(--glass-highlight), inset 0 -1px 0 rgba(255, 255, 255, 0.05); }
   &.fw-panel--dragging { transition: none; }
+}
+
+/* 液态高光：缓慢漂移的环境光 */
+.fw-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 90% at 15% -10%, var(--glass-sheen-strong), transparent 46%),
+    radial-gradient(90% 70% at 85% 110%, var(--glass-sheen), transparent 52%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  animation: liquid-glass-flow 18s ease-in-out infinite alternate;
+}
+
+/* 扫过表面的镜面反光 */
+.fw-panel::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: -40%;
+  right: -40%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    var(--glass-sheen) 48%,
+    transparent 56%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: liquid-glass-sheen 12s ease-in-out infinite;
+}
+
+/* 内容保持在玻璃高光之上 */
+.fw-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes liquid-glass-flow {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.05); }
+}
+
+@keyframes liquid-glass-sheen {
+  0%   { transform: translateX(-45%) rotate(0.001deg); opacity: 0; }
+  8%   { opacity: 0.55; }
+  55%  { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+  100% { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+}
+
+/* 不支持 backdrop-filter 的浏览器回退为实色，避免半透明看不清 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .fw-panel {
+    background: var(--bg-secondary);
+  }
 }
 
 /* ═══════════════════════════════════════════════════

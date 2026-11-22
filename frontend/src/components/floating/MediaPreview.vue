@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import FloatingWindow from "./FloatingWindow.vue";
 import type { PreviewPayload } from "../../types/api";
 import { fileIcon, stripCodeFence } from "../../utils";
 import { UI_DOWNLOAD, UI_OPEN_IN_NEW_TAB } from "../../constants";
-import { md } from "../../utils/markdown";
+import { renderMarkdown } from "../../utils/markdown";
 
 // ── props / emits ────────────────────────────
 
@@ -46,15 +46,24 @@ const headerIcon = computed(() => {
 
 // ── 文件 Markdown 渲染 ────────────────────────
 
-const renderedFileContent = computed(() => {
-  if (props.payload.kind !== "file" || !props.payload.text_content) return null;
-  try {
-    const raw = stripCodeFence(props.payload.text_content, true);
-    return md.render(raw);
-  } catch {
-    return props.payload.text_content;
-  }
-});
+const renderedFileContent = ref<string | null>(null);
+
+watch(
+  () => [props.payload.kind, (props.payload as { text_content?: string }).text_content] as const,
+  async () => {
+    const p = props.payload;
+    if (p.kind !== "file" || !p.text_content) {
+      renderedFileContent.value = null;
+      return;
+    }
+    try {
+      renderedFileContent.value = await renderMarkdown(stripCodeFence(p.text_content, true));
+    } catch {
+      renderedFileContent.value = p.text_content; // 降级为纯文本
+    }
+  },
+  { immediate: true },
+);
 
 // ── 资源 URL / 文件名 ──────────────────────────
 
@@ -127,7 +136,7 @@ const rawText = computed(() => {
 
       <!-- 图片：直接渲染 -->
       <div v-if="payload.kind === 'image'" class="media-wrap">
-        <img :src="payload.src" class="media-img" />
+        <img :src="payload.src" class="media-img" loading="lazy" decoding="async" />
       </div>
 
       <!-- 视频：直接渲染 -->

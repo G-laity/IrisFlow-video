@@ -185,7 +185,7 @@ export const UI_REPEAT_PENALTY = "重复惩罚";
 
 // ── 复制反馈（MessageBubble.vue）────────────────
 
-export const COPY_FEEDBACK_DURATION = 2000;    // 复制成功反馈显示时长（ms）
+export const COPY_FEEDBACK_DURATION = 1000;    // 复制成功反馈显示时长（ms）
 
 // ── SSE 解析（useAgent.ts / ConversationList.vue）─
 
@@ -259,6 +259,11 @@ export const HEALTH_STATUS_LABEL: Record<string, string> = {
 // ── 通用操作 ─────────────────────────────────────
 
 export const UI_CLEAR = "清除";
+export const UI_CANCEL = "取消";
+export const UI_SELECT_ALL = "全选";
+export const UI_DESELECT_ALL = "取消全选";
+export const UI_SELECTED_PREFIX = "已选";
+export const UI_ITEM_UNIT = "项";
 export const UI_CLOSE = "关闭";
 export const UI_SAVE = "保存";
 export const UI_SAVING = "保存中…";
@@ -279,6 +284,7 @@ export const UI_MODIFY_SERVER_URL = "下方可修改后端地址";
 
 // ── 设置面板标签 ──────────────────────────────────
 
+export const UI_TAB_APPEARANCE = "外观";
 export const UI_TAB_SERVER = "服务器";
 export const UI_TAB_LLM = "LLM";
 export const UI_TAB_MCP = "MCP";
@@ -308,6 +314,26 @@ export const UI_SECRETS_DESC = "在 LLM、MCP 配置中使用 ${VAR_NAME} 引用
 export const UI_ADD_VARIABLE = "添加变量";
 export const UI_KEEP_UNCHANGED = "留空保持不变";
 export const UI_ENTER_SECRET_VALUE = "输入密钥值";
+
+// ── 主题（明暗）──────────────────────────────────
+
+export const LS_THEME = "irisflow_theme";
+export const THEME_DARK = "dark" as const;
+export const THEME_LIGHT = "light" as const;
+export const THEME_SYSTEM = "system" as const;
+export type ThemeMode = typeof THEME_DARK | typeof THEME_LIGHT | typeof THEME_SYSTEM;
+
+export const UI_THEME = "主题";
+export const UI_THEME_DESC = "控制台配色。跟随系统会随操作系统深浅色设置自动切换。";
+export const UI_THEME_DARK = "深色";
+export const UI_THEME_LIGHT = "浅色";
+export const UI_THEME_SYSTEM = "跟随系统";
+
+export const THEME_OPTIONS = [
+  { id: THEME_DARK, label: UI_THEME_DARK, icon: "fa-solid fa-moon" },
+  { id: THEME_LIGHT, label: UI_THEME_LIGHT, icon: "fa-solid fa-sun" },
+  { id: THEME_SYSTEM, label: UI_THEME_SYSTEM, icon: "fa-solid fa-circle-half-stroke" },
+] as const;
 export const UI_CLICK_TO_SET = "点击设置";
 export const UI_APPLY_DEFAULTS = "应用会话默认设定";
 
@@ -506,3 +532,8 @@ export const MCP_STATUS_LABEL: Record<string, string> = {
   stopped: UI_MCP_STOPPED,
   error: UI_MCP_ERROR,
 };
+
+// ── 工具调用文本兜底（模型未拿到工具定义时可能输出 <tool_call> 标签）──
+
+export const UI_TOOL_CALL_FALLBACK =
+  "模型尝试调用工具，但当前未启用工具或该模型不支持标准工具调用。请在输入框启用对应工具组，或换用支持工具调用的模型。";

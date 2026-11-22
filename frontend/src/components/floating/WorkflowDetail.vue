@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
-import hljs from "highlight.js";
+import { ref, computed, watch } from "vue";
+import hljs from "highlight.js/lib/core";
+import jsonLang from "highlight.js/lib/languages/json";
+
+hljs.registerLanguage("json", jsonLang);
 import FloatingWindow from "./FloatingWindow.vue";
 import type { WorkflowEntry } from "../../types/api";
-import { md } from "../../utils/markdown";
+import { renderMarkdown } from "../../utils/markdown";
 import { importComposerAssetUrl } from "../../api/client";
 import { parseComposerError } from "../../composables/useComposer";
 import { WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_CALL_PARAMS, UI_NO_TEXT_CONTENT, UI_RAW_DATA, UI_RETURN_RESULT, UI_SEARCH_RESULTS, UI_SEND_FAILED, UI_SEND_TO_COMPOSER, UI_SENT_DEDUP, UI_SENT_OK, UI_THOUGHT_CONTENT, UI_THOUGHT_PROCESS, UI_TOOL_CALL, UI_TOOL_LABEL, UI_TOOL_RESULT } from "../../constants";
@@ -216,15 +219,23 @@ const resultDisplay = computed(() => {
 /** 结果文本的 Markdown 渲染。
  *  原始数据中不再包含 "[错误]" 前缀（后端通过 is_error 字段传递错误状态），
  *  Markdown 块级语法（###/``` 等）自然位于行首，无需额外处理。 */
-const renderedResult = computed(() => {
-  const text = resultDisplay.value;
-  if (!text) return "";
-  try {
-    return md.render(text);
-  } catch {
-    return escapeHtml(text);
-  }
-});
+const renderedResult = ref("");
+
+watch(
+  resultDisplay,
+  async (text) => {
+    if (!text) {
+      renderedResult.value = "";
+      return;
+    }
+    try {
+      renderedResult.value = await renderMarkdown(text);
+    } catch {
+      renderedResult.value = escapeHtml(text); // 降级为纯文本
+    }
+  },
+  { immediate: true },
+);
 
 /** 原始数据文本 — 后端返回的原始字符串，不做任何加工 */
 const rawDataText = computed(() => {

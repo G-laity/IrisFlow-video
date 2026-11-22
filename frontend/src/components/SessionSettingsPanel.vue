@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { useTabIndicator } from "../composables/useTabIndicator";
 import {
   FACTORY_SESSION_DEFAULTS,
   SESSION_PRESETS,
@@ -34,6 +35,72 @@ const emit = defineEmits<{
 }>();
 
 const activeTab = ref("basic");
+const { navEl, indicatorEl, indicatorStyle } = useTabIndicator(activeTab);
+
+// ── 预设类型切换框（同会话列表动效）──────────────
+
+const presetListEl = ref<HTMLElement | null>(null);
+const presetFrameEl = ref<HTMLElement | null>(null);
+const presetFrameStyle = ref<Record<string, string>>({ opacity: "0" });
+
+let _presetReady = false;
+let _presetTop = 0;
+
+async function updatePresetFrame(): Promise<void> {
+  await nextTick();
+  const list = presetListEl.value;
+  const el = presetFrameEl.value;
+  if (!list || !el) return;
+
+  const active = list.querySelector<HTMLElement>(".preset-chip.active");
+  if (!active) {
+    presetFrameStyle.value = { opacity: "0" };
+    _presetReady = false;
+    return;
+  }
+
+  const listRect = list.getBoundingClientRect();
+  const rect = active.getBoundingClientRect();
+  const top = rect.top - listRect.top;
+  const left = rect.left - listRect.left;
+  const changed = Math.abs(top - _presetTop) > 1;
+  const direction = top >= _presetTop ? 1 : -1;
+
+  presetFrameStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    opacity: "1",
+  };
+
+  if (!_presetReady) {
+    el.classList.add("no-anim");
+    requestAnimationFrame(() => el.classList.remove("no-anim"));
+  } else if (changed) {
+    el.getAnimations().forEach(a => a.cancel());
+    el.animate(
+      [
+        { transform: "scaleY(1)", transformOrigin: direction > 0 ? "top" : "bottom" },
+        { transform: "scaleY(1.06)", offset: 0.45 },
+        { transform: "scaleY(1)" },
+      ],
+      { duration: 300, easing: "cubic-bezier(0.22, 1.12, 0.36, 1)" },
+    );
+  }
+
+  _presetTop = top;
+  _presetReady = true;
+}
+
+onMounted(() => {
+  void updatePresetFrame();
+  window.addEventListener("resize", updatePresetFrame);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("resize", updatePresetFrame);
+});
 
 const local = ref<SessionSettings>({ ...props.settings });
 
@@ -99,6 +166,12 @@ const isDefault = computed(() => {
   return true;
 });
 
+watch(
+  [activePresetId, isDefault],
+  () => { void updatePresetFrame(); },
+  { flush: "post" },
+);
+
 // 可清除的高级字段列表
 const clearableFields = [
   { key: "top_p" as const, label: UI_TOP_P, min: 0, max: 1, step: 0.05, fmt: (v: number) => v.toFixed(2) },
@@ -122,7 +195,8 @@ const clearableFields = [
   >
     <div class="settings-layout">
       <!-- 左侧标签栏 -->
-      <nav class="tab-nav">
+      <nav ref="navEl" class="tab-nav" role="tablist">
+        <span ref="indicatorEl" class="tab-indicator" :style="indicatorStyle" aria-hidden="true"></span>
         <button class="tab-btn" :class="{ active: activeTab === 'basic' }" @click="activeTab = 'basic'">
           <i class="fa-solid fa-gear"></i><span>{{ UI_BASIC }}</span>
         </button>
@@ -132,7 +206,13 @@ const clearableFields = [
 
         <div class="tab-nav-spacer"></div>
         <div class="tab-nav-actions">
-          <div class="preset-chips">
+          <div ref="presetListEl" class="preset-chips">
+            <span
+              ref="presetFrameEl"
+              class="preset-frame"
+              :style="presetFrameStyle"
+              aria-hidden="true"
+            ></span>
             <button
               v-for="p in SESSION_PRESETS"
               :key="p.id"
@@ -159,6 +239,8 @@ const clearableFields = [
 
       <!-- 右侧面板 -->
       <div class="tab-content">
+        <Transition name="tab-switch" mode="out-in">
+        <div :key="activeTab" class="tab-panel" role="tabpanel">
         <!-- 基础 -->
         <template v-if="activeTab === 'basic'">
           <div class="section">
@@ -245,6 +327,8 @@ const clearableFields = [
             />
           </div>
         </template>
+        </div>
+        </Transition>
       </div>
     </div>
   </FloatingWindow>
@@ -275,12 +359,38 @@ const clearableFields = [
 }
 
 .preset-chips {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/* 预设类型高亮框：滑动 + 拉伸回弹 + 细高光边 */
+.preset-frame {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 16px;
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-highlight),
+    0 0 12px var(--accent-shadow);
+  transition:
+    top 0.32s cubic-bezier(0.22, 1.12, 0.36, 1),
+    left 0.32s cubic-bezier(0.22, 1.12, 0.36, 1),
+    width 0.32s cubic-bezier(0.22, 1.12, 0.36, 1),
+    height 0.32s cubic-bezier(0.22, 1.12, 0.36, 1),
+    opacity 0.15s ease;
+}
+
+.preset-frame.no-anim {
+  transition: none !important;
+}
+
 .preset-chip {
+  position: relative;
+  z-index: 1;
   height: 32px;
   border-radius: 16px;
   padding: 0 12px;
@@ -297,7 +407,12 @@ const clearableFields = [
 }
 .preset-chip i { font-size: 13px; width: 16px; text-align: center; }
 .preset-chip:hover { color: var(--text-secondary); background: var(--bg-hover); border-color: var(--text-dim); }
-.preset-chip.active { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
+.preset-chip.active {
+  /* 背景与描边由 .preset-frame 统一绘制 */
+  color: var(--accent);
+  border-color: transparent;
+  background: transparent;
+}
 
 .tab-nav-actions {
   padding: 10px 12px;
@@ -311,6 +426,71 @@ const clearableFields = [
 
 .tab-content {
   flex: 1; overflow-y: auto; padding: 20px 24px; min-width: 0;
+}
+
+/* 标签页切换：淡入 + 轻微侧滑 */
+.tab-panel {
+  min-height: 100%;
+}
+/* 标签选中框：滑动指示器 */
+.tab-nav {
+  position: relative;
+}
+
+.tab-btn {
+  position: relative;
+  z-index: 1;
+}
+
+.tab-btn.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tab-indicator {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0;
+  background: var(--accent-bg-mid);
+  box-shadow: inset 2px 0 0 var(--accent);
+  transition:
+    top 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.15s ease;
+}
+
+.tab-indicator.no-anim {
+  transition: none !important;
+}
+
+/* 内容从左侧进入 */
+.tab-switch-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.tab-switch-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+
+.tab-switch-enter-active,
+.tab-switch-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tab-switch-enter-from {
+  opacity: 0;
+  transform: translateX(8px);
+}
+
+.tab-switch-leave-to {
+  opacity: 0;
+  transform: translateX(-8px);
 }
 
 .section { margin-bottom: 16px; }

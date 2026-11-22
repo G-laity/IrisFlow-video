@@ -6,7 +6,7 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <img :src="src" class="thumb" :style="{ width: size + 'px', height: size + 'px' }" />
+  <img :src="src" class="thumb" loading="lazy" decoding="async" :style="{ width: size + 'px', height: size + 'px' }" />
 </template>
 
 <style scoped>

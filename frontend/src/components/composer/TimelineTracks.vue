@@ -167,6 +167,7 @@ const subtitles = computed(() => props.timeline.tracks.subtitles ?? []);
           v-if="currentAsset.kind === 'image'"
           :src="composerFileUrl(currentAsset)"
           alt=""
+          loading="lazy"
         />
         <video
           v-else-if="currentAsset.kind === 'video'"

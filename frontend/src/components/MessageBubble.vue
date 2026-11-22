@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch, onUnmounted } from "vue";
 import { COPY_FEEDBACK_DURATION, ROLE_ASSISTANT, ROLE_USER, UI_COPIED, UI_COPY } from "../constants";
 import type { UIMessage, PreviewPayload } from "../types/api";
 import { fileIcon, filePreview } from "../utils";
-import { md, mediaKindFromUrl } from "../utils/markdown";
+import { renderMarkdown, mediaKindFromUrl } from "../utils/markdown";
+import { sanitizeToolCallMarkup } from "../utils/toolCall";
 import ImageViewer from "./ImageViewer.vue";
 
 const props = defineProps<{
@@ -42,15 +43,37 @@ function handleContentClick(e: MouseEvent) {
   }
 }
 
-const renderedContent = computed(() => {
-  if (props.msg.role !== ROLE_ASSISTANT) return null;
-  const raw = props.msg.content || "";
-  if (!raw.trim()) return null;
-  try {
-    return md.render(raw);
-  } catch {
-    return raw;
-  }
+const displayContent = computed(() => sanitizeToolCallMarkup(props.msg.content || ""));
+
+const renderedContent = ref<string | null>(null);
+let _renderTimer: ReturnType<typeof setTimeout> | null = null;
+let _renderToken = 0;
+
+// 流式内容变化频繁，60ms 防抖后再渲染 Markdown
+watch(
+  () => [props.msg.role, props.msg.content] as const,
+  () => {
+    if (_renderTimer) clearTimeout(_renderTimer);
+    const sanitized = sanitizeToolCallMarkup(props.msg.content || "");
+    if (props.msg.role !== ROLE_ASSISTANT || !sanitized.trim()) {
+      renderedContent.value = null;
+      return;
+    }
+    const token = ++_renderToken;
+    _renderTimer = setTimeout(async () => {
+      try {
+        const html = await renderMarkdown(sanitizeToolCallMarkup(props.msg.content || ""));
+        if (token === _renderToken) renderedContent.value = html;
+      } catch {
+        if (token === _renderToken) renderedContent.value = null; // 降级为纯文本
+      }
+    }, 60);
+  },
+  { immediate: true },
+);
+
+onUnmounted(() => {
+  if (_renderTimer) clearTimeout(_renderTimer);
 });
 
 /** 空内容的 assistant 气泡不展示 */
@@ -58,7 +81,7 @@ const isEmpty = computed(() => props.msg.role === ROLE_ASSISTANT && !props.msg.c
 
 async function handleCopy() {
   try {
-    await navigator.clipboard.writeText(props.msg.content);
+    await navigator.clipboard.writeText(displayContent.value);
     copied.value = true;
     setTimeout(() => (copied.value = false), COPY_FEEDBACK_DURATION);
   } catch { /* ignore */ }
@@ -94,7 +117,7 @@ async function handleCopy() {
         v-html="renderedContent"
         @click="handleContentClick"
       />
-      <div v-if="!renderedContent && msg.content" class="content">{{ msg.content }}</div>
+      <div v-if="!renderedContent && displayContent" class="content">{{ displayContent }}</div>
     </div>
 
     <!-- 复制按钮：气泡下方，靠两侧 -->
@@ -107,6 +130,7 @@ async function handleCopy() {
     >
       <i v-if="copied" class="fa-solid fa-check"></i>
       <i v-else class="fa-regular fa-copy"></i>
+      <span v-if="copied" class="copy-tip">{{ UI_COPIED }}</span>
     </button>
   </div>
 </template>
@@ -128,6 +152,7 @@ async function handleCopy() {
 }
 
 .copy-btn.below {
+  position: relative;
   width: 26px;
   height: 26px;
   display: flex;
@@ -143,8 +168,24 @@ async function handleCopy() {
 }
 
 .copy-btn.below.ok {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.copy-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--success);
+  font-size: 11px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .bubble {
@@ -177,13 +218,13 @@ async function handleCopy() {
 .content {
   white-space: pre-wrap;
   word-break: break-word;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 /* Markdown 渲染结果：HTML 标签之间的源码换行不能被 pre-wrap 当成空行 */
 .content.markdown {
   white-space: normal;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 
 .msg-images { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; margin-bottom: 4px; }

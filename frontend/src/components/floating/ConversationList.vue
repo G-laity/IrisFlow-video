@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, inject } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, inject, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import FloatingWindow from "./FloatingWindow.vue";
 import {
@@ -29,9 +29,11 @@ import {
   STATUS_UNKNOWN,
   UI_DELETE,
   UI_CLEAR_ALL,
-  UI_CLEAR_ALL_CONFIRM,
-  UI_CLEAN_UP,
-  UI_CLEAN_UP_CONFIRM,
+  UI_CANCEL,
+  UI_DESELECT_ALL,
+  UI_ITEM_UNIT,
+  UI_SELECT_ALL,
+  UI_SELECTED_PREFIX,
   UI_LOADING,
   UI_MORE,
   UI_NEW_CHAT,
@@ -74,24 +76,62 @@ const loading = ref(false);
 const editingId = ref<string | null>(null);
 const editTitle = ref("");
 const menuOpenId = ref<string | null>(null);
-const confirmAction = ref<"clear" | "clean" | null>(null);
-let _confirmTimer: ReturnType<typeof setTimeout> | null = null;
+// ── 多选删除模式 ─────────────────────────────────
 
-function resetConfirm() {
-  confirmAction.value = null;
-  if (_confirmTimer) { clearTimeout(_confirmTimer); _confirmTimer = null; }
+const selecting = ref(false);
+const selectedIds = ref<Set<string>>(new Set());
+
+const selectedCount = computed(() => selectedIds.value.size);
+const allSelected = computed(
+  () => conversations.value.length > 0 && selectedCount.value === conversations.value.length,
+);
+
+function enterSelection() {
+  menuOpenId.value = null;
+  editingId.value = null;
+  selecting.value = true;
+  selectedIds.value = new Set(conversations.value.map(c => c.session_id));
 }
 
-function requestConfirm(action: "clear" | "clean") {
-  if (confirmAction.value === action) {
-    // 第二次点击 → 执行
-    resetConfirm();
-    return true;
+function exitSelection() {
+  selecting.value = false;
+  selectedIds.value = new Set();
+}
+
+function toggleSelect(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+  // 全部取消后自动收起操作栏并退出选择模式
+  if (next.size === 0) exitSelection();
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    exitSelection();
+    return;
   }
-  resetConfirm();
-  confirmAction.value = action;
-  _confirmTimer = setTimeout(resetConfirm, 3000);
-  return false;
+  selectedIds.value = new Set(conversations.value.map(c => c.session_id));
+}
+
+function onItemClick(conv: ConversationInfo) {
+  if (selecting.value) toggleSelect(conv.session_id);
+  else router.push("/chat/" + conv.session_id);
+}
+
+async function deleteSelected() {
+  const ids = [...selectedIds.value];
+  if (!ids.length) return;
+  for (const id of ids) {
+    try { await deleteConversation(id); } catch { /* 忽略单条失败 */ }
+    visitedSessionIds.delete(id);
+    removeSessionCache(id);
+  }
+  conversations.value = conversations.value.filter(c => !selectedIds.value.has(c.session_id));
+  const removedCurrent = !!currentSessionId.value && selectedIds.value.has(currentSessionId.value);
+  exitSelection();
+  if (removedCurrent) router.push("/");
 }
 
 // ── 列表闪烁 ──────────────────────────────────────
@@ -224,9 +264,6 @@ function onWindowClick(e: MouseEvent) {
   if (!target.closest(".conv-menu-area")) {
     closeMenu();
   }
-  if (!target.closest(".btn-action")) {
-    resetConfirm();
-  }
 }
 
 // ── SSE 状态订阅（替代轮询）────────────────────────
@@ -334,10 +371,12 @@ onMounted(() => {
     // 否则保持空订阅，等待用户点击会话触发 trackVisitedSession
   });
   window.addEventListener("click", onWindowClick);
+  window.addEventListener("resize", updateActiveFrame);
 });
 
 onUnmounted(() => {
   disconnectStatusSSE();
+  window.removeEventListener("resize", updateActiveFrame);
 });
 
 // 切换会话时清理 + 标记已访问
@@ -420,52 +459,73 @@ defineExpose({ refresh: loadConversations });
 
 // ── 清空 / 清理 ─────────────────────────────────────
 
-/** 展示顺序的扁平 ID 列表（置顶 → 日期分组） */
-const flatOrderedIds = computed(() => {
-  const ids: string[] = [];
-  for (const group of groupedConversations.value) {
-    for (const item of group.items) {
-      ids.push(item.session_id);
-    }
-  }
-  return ids;
-});
-
-/** 仅当选中非置顶会话且其下方还有会话时显示"清理" */
-const showCleanUp = computed(() => {
-  if (!currentSessionId.value) return false;
-  const conv = conversations.value.find(c => c.session_id === currentSessionId.value);
-  if (!conv || conv.pinned) return false;
-  const idx = flatOrderedIds.value.indexOf(currentSessionId.value);
-  return idx >= 0 && idx < flatOrderedIds.value.length - 1;
-});
-
-/** 仅当存在至少一条会话时显示"清空" */
+/** 仅当存在至少一条会话时显示"清空"（进入多选删除模式） */
 const showClearAll = computed(() => conversations.value.length > 0);
 
-async function handleClearAll() {
-  if (!requestConfirm("clear")) return;
-  const ids = conversations.value.map(c => c.session_id);
-  for (const id of ids) {
-    try { await deleteConversation(id); } catch { /* 忽略单条失败 */ }
-    visitedSessionIds.delete(id);
-    removeSessionCache(id);
+// ── 活动会话高亮滑动框 ───────────────────────────
+
+const listEl = ref<HTMLElement | null>(null);
+const frameEl = ref<HTMLElement | null>(null);
+const frameStyle = ref<Record<string, string>>({ opacity: "0" });
+
+let _frameReady = false;
+let _frameTop = 0;
+
+async function updateActiveFrame(): Promise<void> {
+  await nextTick();
+  const list = listEl.value;
+  const el = frameEl.value;
+  if (!list || !el) return;
+
+  const active = list.querySelector<HTMLElement>(".conv-item.active");
+  if (!active) {
+    frameStyle.value = { opacity: "0" };
+    _frameReady = false;
+    return;
   }
-  conversations.value = [];
-  if (currentSessionId.value) router.push("/");
+
+  const listRect = list.getBoundingClientRect();
+  const rect = active.getBoundingClientRect();
+  const top = rect.top - listRect.top;
+  const left = rect.left - listRect.left;
+  const changed = Math.abs(top - _frameTop) > 1;
+  const direction = top >= _frameTop ? 1 : -1;
+
+  frameStyle.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    opacity: "1",
+  };
+
+  if (!_frameReady) {
+    // 首次定位不做动画，避免从 0,0 滑入
+    el.classList.add("no-anim");
+    requestAnimationFrame(() => el.classList.remove("no-anim"));
+  } else if (changed) {
+    // 移动中沿方向拉伸，到位弹性回弹
+    el.getAnimations().forEach(a => a.cancel());
+    el.animate(
+      [
+        { transform: "scaleY(1)", transformOrigin: direction > 0 ? "top" : "bottom" },
+        { transform: "scaleY(1.06)", offset: 0.45 },
+        { transform: "scaleY(1)" },
+      ],
+      { duration: 320, easing: "cubic-bezier(0.22, 1.12, 0.36, 1)" },
+    );
+  }
+
+  _frameTop = top;
+  _frameReady = true;
 }
 
-async function handleCleanUp() {
-  if (!requestConfirm("clean")) return;
-  const idx = flatOrderedIds.value.indexOf(currentSessionId.value!);
-  const toDelete = flatOrderedIds.value.slice(idx + 1);
-  for (const id of toDelete) {
-    try { await deleteConversation(id); } catch { /* 忽略单条失败 */ }
-    conversations.value = conversations.value.filter(c => c.session_id !== id);
-    visitedSessionIds.delete(id);
-    removeSessionCache(id);
-  }
-}
+watch(
+  [currentSessionId, () => conversations.value.length, () => groupedConversations.value],
+  () => { void updateActiveFrame(); },
+  { flush: "post" },
+);
+
 </script>
 
 <template>
@@ -480,23 +540,31 @@ async function handleCleanUp() {
   >
     <template #actions>
       <button
-        v-if="showCleanUp"
-        class="btn-action"
-        :class="{ confirm: confirmAction === 'clean' }"
-        :title="confirmAction === 'clean' ? UI_CLEAN_UP_CONFIRM : UI_CLEAN_UP"
-        @click.stop="handleCleanUp"
-      >
-        <i class="fa-solid fa-broom"></i>
-      </button>
-      <button
-        v-if="showClearAll"
+        v-if="showClearAll && !selecting"
         class="btn-action danger"
-        :class="{ confirm: confirmAction === 'clear' }"
-        :title="confirmAction === 'clear' ? UI_CLEAR_ALL_CONFIRM : UI_CLEAR_ALL"
-        @click.stop="handleClearAll"
+        :title="UI_CLEAR_ALL"
+        :aria-label="UI_CLEAR_ALL"
+        @click.stop="enterSelection"
       >
         <i class="fa-solid fa-trash-can"></i>
       </button>
+    </template>
+
+    <template v-if="selecting" #footer>
+      <div class="selection-bar">
+        <span class="selection-count">{{ UI_SELECTED_PREFIX }} {{ selectedCount }} {{ UI_ITEM_UNIT }}</span>
+        <button class="selection-btn" @click="toggleSelectAll">
+          {{ allSelected ? UI_DESELECT_ALL : UI_SELECT_ALL }}
+        </button>
+        <button class="selection-btn" @click="exitSelection">{{ UI_CANCEL }}</button>
+        <button
+          class="selection-btn danger"
+          :disabled="selectedCount === 0"
+          @click="deleteSelected"
+        >
+          <i class="fa-solid fa-trash"></i> {{ UI_DELETE }}
+        </button>
+      </div>
     </template>
 
     <!-- Conversations -->
@@ -504,7 +572,14 @@ async function handleCleanUp() {
       <button class="btn-new-chat" @click="router.push('/')">
         <i class="fa-solid fa-plus"></i> {{ UI_NEW_CHAT }}
       </button>
-      <div class="conv-list">
+      <div ref="listEl" class="conv-list">
+        <span
+          v-if="!selecting"
+          ref="frameEl"
+          class="conv-active-frame"
+          :style="frameStyle"
+          aria-hidden="true"
+        ></span>
         <!-- 加载中 -->
         <div v-if="loading" class="empty">{{ UI_LOADING }}</div>
 
@@ -516,9 +591,9 @@ async function handleCleanUp() {
             :key="conv.session_id"
             class="conv-item"
             :style="{ '--i': idx }"
-            :class="{ active: conv.session_id === currentSessionId, flash: flashedIds.has(conv.session_id) }"
-            @click="router.push('/chat/' + conv.session_id)"
-            @mousedown.middle.prevent="handleDelete(conv.session_id)"
+            :class="{ active: conv.session_id === currentSessionId, flash: flashedIds.has(conv.session_id), selecting }"
+            @click="onItemClick(conv)"
+            @mousedown.middle.prevent="!selecting && handleDelete(conv.session_id)"
           >
             <template v-if="editingId === conv.session_id">
               <input
@@ -533,6 +608,9 @@ async function handleCleanUp() {
             </template>
             <template v-else>
               <div class="conv-info">
+                <span v-if="selecting" class="conv-check" :class="{ on: selectedIds.has(conv.session_id) }" aria-hidden="true">
+                  <i class="fa-solid fa-check"></i>
+                </span>
                 <i
                   class="conv-status-dot"
                   :class="statusColor(conv.status)"
@@ -541,11 +619,11 @@ async function handleCleanUp() {
                   :aria-label="statusTitle(conv.status)"
                 ></i>
                 <i v-if="conv.pinned" class="pin-indicator fa-solid fa-thumbtack"></i>
-                <span class="conv-title" @dblclick.stop="startRename(conv)">
+                <span class="conv-title" @dblclick.stop="!selecting && startRename(conv)">
                   {{ conv.title }}
                 </span>
               </div>
-              <div class="conv-menu-area">
+              <div v-if="!selecting" class="conv-menu-area">
                 <button
                   class="btn-menu"
                   :class="{ open: menuOpenId === conv.session_id }"
@@ -616,9 +694,35 @@ async function handleCleanUp() {
 }
 
 .conv-list {
+  position: relative;
+}
+
+/* 活动会话高亮框：滑动 + 拉伸回弹 + 细高光边 */
+.conv-active-frame {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow:
+    inset 0 0 0 1px var(--glass-highlight),
+    0 0 14px var(--accent-shadow);
+  transition:
+    top 0.34s cubic-bezier(0.22, 1.12, 0.36, 1),
+    left 0.34s cubic-bezier(0.22, 1.12, 0.36, 1),
+    width 0.34s cubic-bezier(0.22, 1.12, 0.36, 1),
+    height 0.34s cubic-bezier(0.22, 1.12, 0.36, 1),
+    opacity 0.18s ease;
+}
+
+.conv-active-frame.no-anim {
+  transition: none !important;
 }
 
 .group-label {
+  position: relative;
+  z-index: 1;
   font-size: 14px;
   font-weight: 600;
   color: var(--text-dim);
@@ -626,6 +730,8 @@ async function handleCleanUp() {
 }
 
 .conv-item {
+  position: relative;
+  z-index: 1;
   animation: conv-in 0.25s ease both;
   animation-delay: calc(min(var(--i, 0), 12) * 30ms);
   display: flex;
@@ -641,8 +747,9 @@ async function handleCleanUp() {
 }
 
 .conv-item.active {
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-strong);
+  /* 背景与描边由 .conv-active-frame 统一绘制 */
+  background: transparent;
+  border: 1px solid transparent;
 }
 
 .conv-item.flash {
@@ -651,6 +758,74 @@ async function handleCleanUp() {
 @keyframes flash-highlight {
   0%, 100% { background: transparent; }
   50% { background: var(--accent-shadow); }
+}
+
+.conv-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: transparent;
+  font-size: 9px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.conv-check.on {
+  color: var(--white);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-count {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.selection-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.selection-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: var(--text-dim);
+}
+
+.selection-btn.danger {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.selection-btn.danger:hover {
+  background: var(--error-bg-hover);
+}
+
+.selection-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .conv-info {
