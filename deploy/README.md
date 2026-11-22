@@ -147,6 +147,19 @@ curl http://127.0.0.1:9702/health   # {"status":"ok","model":"stable-audio-open-
 - **音乐**：无云端兜底。未部署 Stable Audio 时，`composer_bgm` 会返回引导信息，
   改为上传 / URL 导入现成 BGM 即可，不阻塞编排。
 
+### ACE-Step 主题曲（M4 可选）
+
+任何实现以下契约的 sidecar 都可直接接入，无需改后端代码：
+
+```
+POST {music.base_url}/audio/generate   {"prompt": "...", "duration": 180}
+  → 音频字节（mp3）
+GET  {music.base_url 去掉 /v1}/health
+```
+
+ACE-Step（3.5B，GPU 8-12 GB）部署后把 `music.base_url` 指向其适配服务即可生成完整主题曲；
+RTX 5060 8 GB 属于踩线配置，可能需要量化或降档。
+
 ## 配置云端 TTS（可选，无 GPU 时推荐）
 
 在 `backend/data/composer_config.json`（或设置面板后续版本）中：

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -20,11 +21,14 @@ import httpx
 
 from composer import config as composer_config
 from llm.constants import (
+    MSG_TTS_SPLIT_FAILED,
     TTS_HTTP_TIMEOUT,
     TTS_OUTPUT_FORMAT,
     TTS_PROVIDER_EDGE,
     TTS_PROVIDER_LOCAL,
     TTS_PROVIDER_OPENAI,
+    TTS_SPLIT_DELIMITERS,
+    TTS_SPLIT_MAX_CHARS,
     TTS_SPEECH_PATH,
 )
 
@@ -100,25 +104,10 @@ async def _synth_edge(text: str, voice: str, speed: float) -> tuple[bytes, str]:
     return data, "mp3"
 
 
-async def synthesize(
-    text: str, voice: str | None = None, speed: float | None = None
+async def _synthesize_one(
+    text: str, voice: str | None, speed: float | None
 ) -> tuple[bytes, str, str]:
-    """合成语音，沿降级链尝试。
-
-    Args:
-        text: 待合成文本。
-        voice: 命名音色（配置 voices 映射后传给 provider）；空 = default_voice。
-        speed: 语速倍率（默认 1.0）。
-
-    Returns:
-        (音频字节, 扩展名, 实际使用的 provider)。
-
-    Raises:
-        RuntimeError: 全部 provider 失败（含各级原因）。
-    """
-    text = (text or "").strip()
-    if not text:
-        raise RuntimeError("合成文本为空")
+    """单段文本合成（provider 降级链）。"""
     cfg = composer_config.get_tts()
     named_voice = voice or str(cfg.get("default_voice") or "")
     raw_voices = cfg.get("voices")
@@ -148,6 +137,122 @@ async def synthesize(
             _log.warning("语音 provider '%s' 失败: %s", kind, e)
             errors.append(f"{kind}: {e}")
     raise RuntimeError("全部语音 provider 失败 → " + " | ".join(errors))
+
+
+def _split_sentences(text: str) -> list[str]:
+    """按中英文标点/换行切句。"""
+    parts: list[str] = []
+    buf = ""
+    for ch in text:
+        buf += ch
+        if ch in TTS_SPLIT_DELIMITERS:
+            if buf.strip():
+                parts.append(buf.strip())
+            buf = ""
+    if buf.strip():
+        parts.append(buf.strip())
+    return parts
+
+
+def split_text(text: str, max_chars: int = TTS_SPLIT_MAX_CHARS) -> list[str]:
+    """按句合并为 ≤ max_chars 的片段；超长单句硬切。"""
+    chunks: list[str] = []
+    current = ""
+    for sentence in _split_sentences(text):
+        while len(sentence) > max_chars:
+            chunks.append(sentence[:max_chars])
+            sentence = sentence[max_chars:]
+        if not sentence:
+            continue
+        if current and len(current) + len(sentence) > max_chars:
+            chunks.append(current)
+            current = sentence
+        else:
+            current += sentence
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+async def _concat_audio(parts: list[bytes]) -> bytes:
+    """用 ffmpeg 把多段音频拼接为一个 mp3。"""
+    from composer import ffmpeg as composer_ffmpeg
+
+    if not composer_ffmpeg.ffmpeg_available:
+        raise RuntimeError("ffmpeg 不可用，无法拼接分句音频")
+    tmpdir = Path(tempfile.mkdtemp(prefix="iris_tts_"))
+    try:
+        names: list[str] = []
+        for i, data in enumerate(parts):
+            name = f"part_{i:03d}.mp3"
+            (tmpdir / name).write_bytes(data)
+            names.append(name)
+        (tmpdir / "list.txt").write_text(
+            chr(10).join(f"file '{n}'" for n in names), encoding="utf-8"
+        )
+        cmd = [
+            composer_ffmpeg.ffmpeg_path, "-xerror", "-y",
+            "-f", "concat", "-safe", "0", "-i", "list.txt",
+            "-c:a", "libmp3lame", "-q:a", "4", "merged.mp3",
+        ]
+        await composer_ffmpeg.run_ffmpeg(cmd, cwd=tmpdir)
+        return (tmpdir / "merged.mp3").read_bytes()
+    finally:
+        shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+async def synthesize(
+    text: str,
+    voice: str | None = None,
+    speed: float | None = None,
+    split: bool = True,
+) -> tuple[bytes, str, str]:
+    """合成语音（M4：长文本自动分句合成后拼接）。
+
+    Returns:
+        (音频字节, 扩展名, 实际使用的 provider)。
+    """
+    text = (text or "").strip()
+    if not text:
+        raise RuntimeError("合成文本为空")
+    if split and len(text) > TTS_SPLIT_MAX_CHARS:
+        chunks = split_text(text)
+        if len(chunks) > 1:
+            _log.info("长文本分句合成: %d 段（%d 字）", len(chunks), len(text))
+            audio_parts: list[bytes] = []
+            provider = ""
+            try:
+                for chunk in chunks:
+                    data, _, provider = await _synthesize_one(chunk, voice, speed)
+                    audio_parts.append(data)
+                return await _concat_audio(audio_parts), "mp3", provider
+            except Exception as e:
+                raise RuntimeError(f"{MSG_TTS_SPLIT_FAILED}: {e}") from None
+    return await _synthesize_one(text, voice, speed)
+
+
+async def synthesize_dialogue(
+    segments: list[dict[str, object]], speed: float | None = None
+) -> tuple[bytes, str, str]:
+    """多说话人对话合成：逐段指定音色，拼接为单条音频。"""
+    if not segments:
+        raise RuntimeError("对话片段为空")
+    parts: list[bytes] = []
+    provider = ""
+    for seg in segments:
+        text = str(seg.get("text") or "").strip()
+        if not text:
+            continue
+        voice = seg.get("voice")
+        data, _, provider = await synthesize(
+            text, str(voice) if voice else None, speed, split=True
+        )
+        parts.append(data)
+    if not parts:
+        raise RuntimeError("对话片段均为空文本")
+    if len(parts) == 1:
+        return parts[0], "mp3", provider
+    return await _concat_audio(parts), "mp3", provider
 
 
 async def probe() -> dict[str, object]:

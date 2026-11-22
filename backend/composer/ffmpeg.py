@@ -14,6 +14,7 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
+from composer import config as composer_config
 from llm.constants import (
     COMPOSER_PROBE_TIMEOUT,
     FFMPEG_AUDIO_BITRATE,
@@ -22,6 +23,11 @@ from llm.constants import (
     FFMPEG_PIX_FMT,
     FFMPEG_VIDEO_PRESET,
     RENDER_ERROR_TAIL,
+    SIDECHAIN_ATTACK,
+    SIDECHAIN_RATIO,
+    SIDECHAIN_RELEASE,
+    SIDECHAIN_THRESHOLD,
+    XFADE_TYPE_MAP,
 )
 
 _log = logging.getLogger(__name__)
@@ -183,11 +189,50 @@ def _to_float(value: object, default: float = 0.0) -> float:
         return default
 
 
+def _encoding() -> tuple[str, str, str]:
+    """返回 (preset, crf, audio_bitrate)，配置缺失时回退常量。"""
+    enc = composer_config.get_encoding()
+    preset = str(enc.get("preset") or FFMPEG_VIDEO_PRESET)
+    crf = str(enc.get("crf") if enc.get("crf") is not None else FFMPEG_CRF)
+    audio_bitrate = str(enc.get("audio_bitrate") or FFMPEG_AUDIO_BITRATE)
+    return preset, crf, audio_bitrate
+
+
 def _vf_normalize(width: int, height: int, fps: int) -> str:
     return (
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,"
         f"setsar=1,fps={fps},format={FFMPEG_PIX_FMT}"
+    )
+
+
+def _kenburns_vf(motion: dict[str, object], width: int, height: int, fps: int, duration: float) -> str:
+    """Ken Burns 运镜 filter（zoompan）。"""
+    from_zoom = _to_float(motion.get("from_zoom"), 1.0)
+    to_zoom = _to_float(motion.get("to_zoom"), 1.0)
+    pan = str(motion.get("pan") or "none")
+    frames = max(1, int(round(duration * fps)))
+    z = f"{from_zoom:.3f}+({to_zoom:.3f}-{from_zoom:.3f})*on/{frames}"
+    cx = "iw/2-(iw/zoom/2)"
+    cy = "ih/2-(ih/zoom/2)"
+    if pan == "left":
+        x, y = f"(iw-iw/zoom)*(1-on/{frames})", cy
+    elif pan == "right":
+        x, y = f"(iw-iw/zoom)*on/{frames}", cy
+    elif pan == "up":
+        x, y = cx, f"(ih-ih/zoom)*(1-on/{frames})"
+    elif pan == "down":
+        x, y = cx, f"(ih-ih/zoom)*on/{frames}"
+    else:
+        x, y = cx, cy
+    # 先放大 2 倍保证运镜画质，再 zoompan 到目标尺寸
+    pre = (
+        f"scale={width * 2}:{height * 2}:force_original_aspect_ratio=increase,"
+        f"crop={width * 2}:{height * 2}"
+    )
+    return (
+        f"{pre},zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={width}x{height}:fps={fps},"
+        f"setsar=1,format={FFMPEG_PIX_FMT}"
     )
 
 
@@ -198,18 +243,25 @@ def build_segment_cmd(
     trim_in: float,
     preset: dict[str, int],
     out_path: Path,
+    motion: dict[str, object] | None = None,
 ) -> list[str]:
     """单镜头规格化转码命令（图片循环 / 视频裁切，统一分辨率帧率，去除原声）。"""
     if not ffmpeg_path:
         raise RuntimeError(last_probe_error or "ffmpeg 不可用")
     width, height, fps = preset["width"], preset["height"], preset["fps"]
+    preset_name, crf, _ = _encoding()
     if kind == "image":
         args = [ffmpeg_path, "-xerror", "-y", "-loop", "1", "-i", str(asset_path)]
+        if motion and str(motion.get("type") or "") == "kenburns":
+            vf = _kenburns_vf(motion, width, height, fps, duration)
+        else:
+            vf = _vf_normalize(width, height, fps)
     else:
         args = [ffmpeg_path, "-xerror", "-y", "-ss", f"{trim_in:.3f}", "-i", str(asset_path)]
+        vf = _vf_normalize(width, height, fps)
     args += [
-        "-vf", _vf_normalize(width, height, fps),
-        "-c:v", "libx264", "-preset", FFMPEG_VIDEO_PRESET, "-crf", FFMPEG_CRF,
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", preset_name, "-crf", crf,
         "-t", f"{duration:.3f}",
         "-an",
         str(out_path),
@@ -227,6 +279,29 @@ def build_concat_cmd(list_path: Path, out_path: Path) -> list[str]:
     ]
 
 
+def build_xfade_cmd(
+    prev_path: Path,
+    next_path: Path,
+    transition_type: str,
+    duration: float,
+    offset: float,
+    out_path: Path,
+) -> list[str]:
+    """两两 xfade 转场（输入已统一规格）。"""
+    if not ffmpeg_path:
+        raise RuntimeError(last_probe_error or "ffmpeg 不可用")
+    preset_name, crf, _ = _encoding()
+    xfade = XFADE_TYPE_MAP.get(transition_type, "fade")
+    return [
+        ffmpeg_path, "-xerror", "-y",
+        "-i", str(prev_path), "-i", str(next_path),
+        "-filter_complex",
+        f"[0:v][1:v]xfade=transition={xfade}:duration={duration:.3f}:offset={offset:.3f},format={FFMPEG_PIX_FMT}[v]",
+        "-map", "[v]", "-c:v", "libx264", "-preset", preset_name, "-crf", crf,
+        "-an", str(out_path),
+    ]
+
+
 def build_mux_cmd(
     merged_path: Path,
     output_path: Path,
@@ -234,17 +309,15 @@ def build_mux_cmd(
     audio_tracks: list[dict[str, object]],
     total_duration: float,
 ) -> list[str]:
-    """字幕烧录 + 音轨混合命令。
+    """ASS 字幕烧录 + 音轨混合（M4：旁白侧链压 BGM）。
 
     Args:
-        merged_path: 拼接后的视频（相对 cwd）。
-        output_path: 输出文件（相对 cwd）。
-        subtitle_name: 字幕文件名（相对 cwd，None = 无字幕）。
-        audio_tracks: [{path, role, start, duration, gain, fade_in, fade_out, loop}]
-        total_duration: 成片总时长（秒）。
+        subtitle_name: ASS 文件名（相对 cwd，None = 无字幕）。
+        audio_tracks: [{path, role, start, duration, gain, fade_in, fade_out, loop, ducking}]
     """
     if not ffmpeg_path:
         raise RuntimeError(last_probe_error or "ffmpeg 不可用")
+    preset_name, crf, audio_bitrate = _encoding()
 
     args: list[str] = [ffmpeg_path, "-xerror", "-y", "-i", str(merged_path)]
     for track in audio_tracks:
@@ -255,10 +328,13 @@ def build_mux_cmd(
     filters: list[str] = []
     has_video_filter = False
     if subtitle_name:
-        filters.append(f"[0:v]subtitles={subtitle_name}[vout]")
+        filters.append(f"[0:v]ass={subtitle_name}[vout]")
         has_video_filter = True
 
-    audio_labels: list[str] = []
+    all_labels: list[str] = []
+    narration_labels: list[str] = []
+    duck_labels: list[str] = []
+    plain_labels: list[str] = []
     for i, track in enumerate(audio_tracks, start=1):
         dur = max(0.1, _to_float(track.get("duration")))
         gain = _to_float(track.get("gain"), 1.0)
@@ -274,28 +350,62 @@ def build_mux_cmd(
             chain += f",afade=t=out:st={fo_start:.3f}:d={fade_out:.3f}"
         chain += f",adelay={start_ms}|{start_ms}[a{i}]"
         filters.append(chain)
-        audio_labels.append(f"[a{i}]")
+        label = f"[a{i}]"
+        all_labels.append(label)
+        role = str(track.get("role") or "")
+        if role == "narration":
+            narration_labels.append(label)
+        elif role == "bgm" and bool(track.get("ducking", True)):
+            duck_labels.append(label)
+        else:
+            plain_labels.append(label)
 
-    if audio_labels:
-        mix = (
-            "".join(audio_labels)
-            + f"amix=inputs={len(audio_labels)}:duration=longest:normalize=0,"
-            + f"apad=whole_dur={total_duration:.3f},atrim=0:{total_duration:.3f}[aout]"
+    final_labels: list[str] = []
+    if narration_labels and duck_labels:
+        filters.append(
+            "".join(narration_labels)
+            + f"amix=inputs={len(narration_labels)}:duration=longest:normalize=0[nar]"
         )
-        filters.append(mix)
+        filters.append("[nar]asplit=2[nar_out][nar_key]")
+        filters.append(
+            "".join(duck_labels)
+            + f"amix=inputs={len(duck_labels)}:duration=longest:normalize=0[bgmduck_in]"
+        )
+        filters.append(
+            f"[bgmduck_in][nar_key]sidechaincompress="
+            f"threshold={SIDECHAIN_THRESHOLD}:ratio={SIDECHAIN_RATIO}:"
+            f"attack={SIDECHAIN_ATTACK}:release={SIDECHAIN_RELEASE}[bgmduck]"
+        )
+        final_labels = ["[nar_out]", "[bgmduck]"] + plain_labels
+    else:
+        final_labels = all_labels
+
+    has_audio = bool(final_labels)
+    if has_audio:
+        if len(final_labels) > 1:
+            filters.append(
+                "".join(final_labels)
+                + f"amix=inputs={len(final_labels)}:duration=longest:normalize=0[amixed]"
+            )
+            mix_label = "[amixed]"
+        else:
+            mix_label = final_labels[0]
+        filters.append(
+            f"{mix_label}apad=whole_dur={total_duration:.3f},atrim=0:{total_duration:.3f}[aout]"
+        )
 
     if filters:
         args += ["-filter_complex", ";".join(filters)]
 
     if has_video_filter:
-        args += ["-map", "[vout]", "-c:v", "libx264", "-preset", FFMPEG_VIDEO_PRESET, "-crf", FFMPEG_CRF]
+        args += ["-map", "[vout]", "-c:v", "libx264", "-preset", preset_name, "-crf", crf]
     else:
         args += ["-map", "0:v", "-c:v", "copy"]
 
-    if audio_labels:
+    if has_audio:
         args += [
             "-map", "[aout]",
-            "-c:a", "aac", "-ar", str(FFMPEG_AUDIO_SAMPLE_RATE), "-b:a", FFMPEG_AUDIO_BITRATE,
+            "-c:a", "aac", "-ar", str(FFMPEG_AUDIO_SAMPLE_RATE), "-b:a", audio_bitrate,
         ]
     else:
         args += ["-an"]

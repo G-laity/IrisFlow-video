@@ -32,6 +32,7 @@ from llm.constants import (
     RENDER_CONCAT_LIST_NAME,
     RENDER_DIR,
     RENDER_FAILED,
+    RENDER_ASS_NAME,
     RENDER_LOG_PREFIX,
     RENDER_MUXING,
     RENDER_OUTPUT_NAME,
@@ -43,10 +44,10 @@ from llm.constants import (
     RENDER_RENDERING,
     RENDER_SEGMENT_DIR,
     RENDER_SEGMENT_PATTERN,
-    RENDER_SUBTITLES_NAME,
     TRACK_AUDIO,
     TRACK_VIDEO,
     TRACK_SUBTITLES,
+    TRANSITION_FADE,
 )
 
 _log = logging.getLogger(__name__)
@@ -251,6 +252,16 @@ class RenderQueue:
         total = len(segments)
         seg_paths: list[Path] = []
         total_duration = 0.0
+        seg_durations: list[float] = []
+        seg_transitions: list[tuple[str, float]] = []
+        for i, seg in enumerate(segments):
+            duration = float(seg.get("duration") or 0.0) if isinstance(seg, dict) else 0.0
+            trans = seg.get("transition_in") if isinstance(seg, dict) else None
+            t_dur = float(trans.get("duration") or 0.0) if isinstance(trans, dict) else 0.0
+            t_type = str(trans.get("type") or TRANSITION_FADE) if isinstance(trans, dict) else TRANSITION_FADE
+            seg_durations.append(duration)
+            seg_transitions.append((t_type, t_dur if i > 0 else 0.0))
+        transition_total = sum(t[1] for t in seg_transitions)
 
         await self._set_state(
             render_id, RENDER_PREPARING, 0.0,
@@ -274,8 +285,9 @@ class RenderQueue:
             if not asset_path.is_file():
                 raise RuntimeError(f"素材文件缺失: {asset_path}")
             out_path = segments_dir / (RENDER_SEGMENT_PATTERN % i)
+            motion = seg.get("motion") if isinstance(seg.get("motion"), dict) else None
             cmd = composer_ffmpeg.build_segment_cmd(
-                asset_path, kind, duration, float(seg.get("trim_in") or 0.0), preset, out_path
+                asset_path, kind, duration, float(seg.get("trim_in") or 0.0), preset, out_path, motion
             )
 
             def _on_progress(frac: float, idx: int = i) -> None:
@@ -306,16 +318,54 @@ class RenderQueue:
             {"total_segments": total, "done_segments": total, "current": "concat"},
         )
         list_path = render_dir / RENDER_CONCAT_LIST_NAME
-        list_path.write_text(
-            "".join(f"file '{RENDER_SEGMENT_DIR}/{p.name}'\n" for p in seg_paths),
-            encoding="utf-8",
-        )
-        merged_path = render_dir / "merged.mp4"
-        await composer_ffmpeg.run_ffmpeg(
-            composer_ffmpeg.build_concat_cmd(Path(RENDER_CONCAT_LIST_NAME), Path("merged.mp4")),
-            cwd=render_dir, log_path=log_path,
-            register_proc=lambda p: self._register_proc(render_id, p),
-        )
+        if transition_total > 0:
+            # 逐对 xfade（两两合并，避免超长 filter_complex）
+            current_path = seg_paths[0]
+            accumulated = seg_durations[0]
+            for i in range(1, total):
+                t_type, t_dur = seg_transitions[i]
+                if render_id in self._cancel:
+                    raise RenderCanceled()
+                out_path = render_dir / f"xfade_{i:03d}.mp4"
+                offset = max(0.0, accumulated - t_dur)
+
+                def _on_pair(frac: float, idx: int = i) -> None:
+                    overall = RENDER_PROGRESS_PREPARING + (idx / max(1, total - 1)) * (
+                        RENDER_PROGRESS_CONCAT - RENDER_PROGRESS_PREPARING
+                    )
+                    self._update_progress(
+                        render_id, overall,
+                        {"total_segments": total, "done_segments": total,
+                         "current": f"transition {idx}/{total - 1}"},
+                    )
+
+                await composer_ffmpeg.run_ffmpeg(
+                    composer_ffmpeg.build_xfade_cmd(
+                        current_path, seg_paths[i], t_type, t_dur, offset, Path(out_path.name)
+                    ),
+                    duration=accumulated + seg_durations[i] - t_dur,
+                    cwd=render_dir, log_path=log_path,
+                    on_progress=_on_pair,
+                    register_proc=lambda p: self._register_proc(render_id, p),
+                )
+                if current_path not in seg_paths:
+                    current_path.unlink(missing_ok=True)
+                current_path = out_path
+                accumulated = accumulated + seg_durations[i] - t_dur
+            merged_path = current_path
+            total_duration = accumulated
+        else:
+            list_path.write_text(
+                chr(10).join(f"file '{RENDER_SEGMENT_DIR}/{p.name}'" for p in seg_paths),
+                encoding="utf-8",
+            )
+            merged_path = render_dir / "merged.mp4"
+            await composer_ffmpeg.run_ffmpeg(
+                composer_ffmpeg.build_concat_cmd(Path(RENDER_CONCAT_LIST_NAME), Path("merged.mp4")),
+                cwd=render_dir, log_path=log_path,
+                register_proc=lambda p: self._register_proc(render_id, p),
+            )
+            total_duration -= transition_total
         self._update_progress(
             render_id, RENDER_PROGRESS_CONCAT,
             {"total_segments": total, "done_segments": total, "current": "muxing"},
@@ -332,10 +382,11 @@ class RenderQueue:
         subtitle_name: str | None = None
         subs = tracks.get(TRACK_SUBTITLES)
         if isinstance(subs, list) and subs:
-            srt = composer_timeline.generate_srt([s for s in subs if isinstance(s, dict)])
-            if srt.strip():
-                (render_dir / RENDER_SUBTITLES_NAME).write_text(srt, encoding="utf-8")
-                subtitle_name = RENDER_SUBTITLES_NAME
+            valid_subs = [s for s in subs if isinstance(s, dict)]
+            ass = composer_timeline.generate_ass(valid_subs, preset["width"], preset["height"])
+            if "Dialogue:" in ass:
+                (render_dir / RENDER_ASS_NAME).write_text(ass, encoding="utf-8")
+                subtitle_name = RENDER_ASS_NAME
 
         audio_tracks: list[dict[str, object]] = []
         audio_entries = tracks.get(TRACK_AUDIO)
@@ -358,6 +409,7 @@ class RenderQueue:
                     "fade_in": float(track.get("fade_in") or 0.0),
                     "fade_out": float(track.get("fade_out") or 0.0),
                     "loop": bool(track.get("loop")),
+                    "ducking": bool(track.get("ducking", True)),
                 })
 
         def _on_mux_progress(frac: float) -> None:
@@ -369,7 +421,7 @@ class RenderQueue:
 
         await composer_ffmpeg.run_ffmpeg(
             composer_ffmpeg.build_mux_cmd(
-                Path("merged.mp4"), Path(RENDER_OUTPUT_NAME), subtitle_name, audio_tracks, total_duration
+                Path(merged_path.name), Path(RENDER_OUTPUT_NAME), subtitle_name, audio_tracks, total_duration
             ),
             duration=total_duration, cwd=render_dir, log_path=log_path,
             on_progress=_on_mux_progress,

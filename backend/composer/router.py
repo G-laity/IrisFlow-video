@@ -187,23 +187,44 @@ async def upload_asset(file: UploadFile = File(...)):
     return {"asset": iso_asset(asset), "duplicated": duplicated, "warnings": warnings}
 
 
+class TTSDialogueSegment(BaseModel):
+    text: str = Field(description="该句文本")
+    voice: str | None = Field(default=None, description="该句音色，空 = 默认")
+
+
 class TTSRequest(BaseModel):
-    text: str = Field(description="待合成文本（旁白）")
+    text: str | None = Field(default=None, description="待合成文本（与 segments 二选一）")
+    segments: list[TTSDialogueSegment] | None = Field(
+        default=None, description="多说话人对话片段（与 text 二选一）"
+    )
     voice: str | None = Field(default=None, description="命名音色，空 = 配置默认")
     speed: float | None = Field(default=None, description="语速倍率，默认 1.0")
+    split: bool = Field(default=True, description="长文本是否自动分句合成")
 
 
 @router.post("/assets/tts")
 async def generate_tts(req: TTSRequest):
-    """语音合成并入库（source=tts），返回素材 + 探测时长。"""
+    """语音合成并入库（source=tts）。支持长文本分句与多说话人 segments。"""
+    text = (req.text or "").strip()
+    if not text and not req.segments:
+        raise HTTPException(status_code=400, detail="text 与 segments 至少提供一个")
     try:
-        data, ext, provider = await composer_tts.synthesize(req.text, req.voice, req.speed)
+        if req.segments:
+            data, ext, provider = await composer_tts.synthesize_dialogue(
+                [seg.model_dump() for seg in req.segments], req.speed
+            )
+            meta_text = f"[dialogue:{len(req.segments)}]"
+        else:
+            data, ext, provider = await composer_tts.synthesize(
+                text, req.voice, req.speed, split=req.split
+            )
+            meta_text = text[:200]
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=f"{MSG_TTS_UNAVAILABLE}（{e}）") from None
     try:
         asset, duplicated = await composer_assets.import_from_bytes(
             data, f".{ext}", COMPOSER_SOURCE_TTS,
-            meta={"model": provider, "voice": req.voice or "", "text": req.text[:200]},
+            meta={"model": provider, "voice": req.voice or "", "text": meta_text},
         )
     except (ValueError, RuntimeError) as e:
         raise _http_error(e) from None

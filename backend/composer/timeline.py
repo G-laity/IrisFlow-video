@@ -19,10 +19,16 @@ from llm.constants import (
     ROLE_BGM,
     ROLE_NARRATION,
     SRT_TIMESTAMP_FORMAT,
+    SUBTITLE_FONT,
+    SUBTITLE_STYLE_DEFAULT,
+    SUBTITLE_STYLES,
     TIMELINE_VERSION,
     TRACK_AUDIO,
     TRACK_SUBTITLES,
     TRACK_VIDEO,
+    TRANSITION_TYPES,
+    ZOOM_MAX,
+    ZOOM_MIN,
 )
 
 _VALID_PANS = {PAN_NONE, PAN_LEFT, PAN_RIGHT, PAN_UP, PAN_DOWN}
@@ -109,6 +115,11 @@ def validate_timeline(
             errors.append(f"{prefix}.trim_in 不能为负数")
         transition = seg.get("transition_in")
         if isinstance(transition, dict):
+            t_type = transition.get("type")
+            if t_type is not None and str(t_type) not in TRANSITION_TYPES:
+                errors.append(
+                    f"{prefix}.transition_in.type 无效: {t_type!r}（fade / dissolve / slide）"
+                )
             t_dur = _as_float(transition.get("duration"), 0.0) or 0.0
             if t_dur < 0:
                 errors.append(f"{prefix}.transition_in.duration 不能为负数")
@@ -128,6 +139,14 @@ def validate_timeline(
             pan = motion.get("pan")
             if pan is not None and str(pan) not in _VALID_PANS:
                 errors.append(f"{prefix}.motion.pan 无效: {pan!r}")
+            from_zoom = _as_float(motion.get("from_zoom"), 1.0)
+            to_zoom = _as_float(motion.get("to_zoom"), 1.0)
+            if from_zoom is None or not (ZOOM_MIN <= from_zoom <= ZOOM_MAX):
+                errors.append(f"{prefix}.motion.from_zoom 必须在 [{ZOOM_MIN}, {ZOOM_MAX}]")
+            if to_zoom is None or not (ZOOM_MIN <= to_zoom <= ZOOM_MAX):
+                errors.append(f"{prefix}.motion.to_zoom 必须在 [{ZOOM_MIN}, {ZOOM_MAX}]")
+            if from_zoom is not None and to_zoom is not None and to_zoom < from_zoom:
+                errors.append(f"{prefix}.motion.to_zoom 不能小于 from_zoom")
         prev_duration = duration
 
     # ── audio 轨 ──────────────────────────────────
@@ -155,6 +174,9 @@ def validate_timeline(
         dur = _as_float(trk.get("duration"), 0.0) or 0.0
         if dur <= 0:
             errors.append(f"{prefix}.duration 必须为正数")
+        ducking = trk.get("ducking")
+        if ducking is not None and not isinstance(ducking, bool):
+            errors.append(f"{prefix}.ducking 必须是布尔值")
 
     # ── subtitles 轨 ──────────────────────────────
     subtitles = tracks.get(TRACK_SUBTITLES, [])
@@ -174,6 +196,11 @@ def validate_timeline(
             errors.append(f"{prefix} 时间区间非法: start={start}, end={end}（需 0 ≤ start < end）")
         if not str(sub.get("text") or "").strip():
             errors.append(f"{prefix}.text 不能为空")
+        style = sub.get("style")
+        if style is not None and str(style) not in SUBTITLE_STYLES:
+            errors.append(
+                f"{prefix}.style 无效: {style!r}（可选: {', '.join(SUBTITLE_STYLES)}）"
+            )
 
     return errors
 
@@ -194,6 +221,62 @@ def generate_srt(subtitles: list[dict[str, object]]) -> str:
         lines.append("")
         index += 1
     return "\n".join(lines)
+
+
+def generate_ass(subtitles: list[dict[str, object]], width: int, height: int) -> str:
+    """时间轴字幕 → ASS（M4 样式化字幕）。"""
+    lines: list[str] = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        f"PlayResX: {width}",
+        f"PlayResY: {height}",
+        "WrapStyle: 0",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        (
+            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, "
+            "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, "
+            "ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, "
+            "Alignment, MarginL, MarginR, MarginV, Encoding"
+        ),
+    ]
+    for name, spec in SUBTITLE_STYLES.items():
+        lines.append(
+            f"Style: {name},{SUBTITLE_FONT},{spec['size']},"
+            "&H00FFFFFF,&H000000FF,&H00000000,&H64000000,"
+            "0,0,0,0,100,100,0,0,1,"
+            f"{spec['outline']},0,{spec['alignment']},40,40,{spec['margin_v']},1"
+        )
+    lines += [
+        "",
+        "[Events]",
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
+    ]
+    for sub in subtitles:
+        start = _as_float(sub.get("start"), 0.0) or 0.0
+        end = _as_float(sub.get("end"), 0.0) or 0.0
+        if end <= start:
+            continue
+        text = str(sub.get("text") or "").replace("\r\n", "\n").replace("\n", "\\N").strip()
+        if not text:
+            continue
+        # 避免被 libass 当成 override 标签
+        text = text.replace("{", "(").replace("}", ")")
+        style = str(sub.get("style") or SUBTITLE_STYLE_DEFAULT)
+        if style not in SUBTITLE_STYLES:
+            style = SUBTITLE_STYLE_DEFAULT
+        lines.append(f"Dialogue: 0,{_fmt_ass_time(start)},{_fmt_ass_time(end)},{style},,0,0,0,,{text}")
+    return "\n".join(lines) + "\n"
+
+
+def _fmt_ass_time(seconds: float) -> str:
+    """ASS 时间格式：H:MM:SS.cc（厘秒）。"""
+    cs = int(round(seconds * 100))
+    h, rem = divmod(cs, 360_000)
+    m, rem = divmod(rem, 6_000)
+    s, cs = divmod(rem, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
 def _fmt_srt_time(seconds: float) -> str:

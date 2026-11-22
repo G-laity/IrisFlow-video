@@ -288,16 +288,23 @@ class ComposerTtsTool(Tool):
         description=(
             "将文本合成为旁白语音并自动入库（source=tts），一次调用完成合成 + 入库。"
             "返回 asset_id 与探测时长（秒）——请用该时长对齐镜头时长与字幕节奏。"
+            "长文本（>80 字）默认自动分句合成后拼接；多说话人对话用 segments 传入"
+            "（JSON 数组 [{\"text\": \"...\", \"voice\": \"旁白·女\"}]，与 text 二选一）。"
             "voice 使用配置中的命名音色（默认「旁白·男」）。"
         ),
         parameters={
             "type": "object",
             "properties": {
-                "text": {"type": "string", "description": "旁白文本"},
+                "text": {"type": "string", "description": "旁白文本（与 segments 二选一）"},
+                "segments": {
+                    "type": "string",
+                    "description": "多说话人片段 JSON 数组，如 [{\"text\":\"你好\",\"voice\":\"旁白·女\"}]",
+                },
                 "voice": {"type": "string", "description": "命名音色，如「旁白·男」「旁白·女」"},
                 "speed": {"type": "number", "description": "语速倍率，默认 1.0"},
+                "split": {"type": "boolean", "description": "长文本是否自动分句（默认 true）"},
             },
-            "required": ["text"],
+            "required": [],
         },
     )
     icon = "fa-solid fa-microphone"
@@ -310,18 +317,39 @@ class ComposerTtsTool(Tool):
         from composer import tts as composer_tts
 
         text = str(kwargs.get("text") or "").strip()
-        if not text:
-            raise RuntimeError("缺失 text")
+        raw_segments = kwargs.get("segments")
+        segments: list[dict[str, object]] | None = None
+        if raw_segments:
+            if isinstance(raw_segments, str):
+                try:
+                    parsed = json.loads(raw_segments)
+                except json.JSONDecodeError as e:
+                    return f"segments JSON 解析失败: {e}"
+            else:
+                parsed = raw_segments
+            if isinstance(parsed, list):
+                segments = [s for s in parsed if isinstance(s, dict)]
+        if not text and not segments:
+            raise RuntimeError("缺失 text 或 segments")
         voice = kwargs.get("voice")
         speed = kwargs.get("speed")
-        data, ext, provider = await composer_tts.synthesize(
-            text,
-            str(voice) if voice else None,
-            float(speed) if isinstance(speed, (int, float)) else None,
-        )
+        split = kwargs.get("split", True)
+        if segments:
+            data, ext, provider = await composer_tts.synthesize_dialogue(
+                segments, float(speed) if isinstance(speed, (int, float)) else None
+            )
+            meta_text = f"[dialogue:{len(segments)}]"
+        else:
+            data, ext, provider = await composer_tts.synthesize(
+                text,
+                str(voice) if voice else None,
+                float(speed) if isinstance(speed, (int, float)) else None,
+                split=bool(split),
+            )
+            meta_text = text[:200]
         asset, duplicated = await composer_assets.import_from_bytes(
             data, f".{ext}", "tts",
-            meta={"model": provider, "voice": str(voice or ""), "text": text[:200]},
+            meta={"model": provider, "voice": str(voice or ""), "text": meta_text},
         )
         if not duplicated:
             await _broadcast_asset(asset)

@@ -180,11 +180,45 @@ PAN_LEFT = "left"
 PAN_RIGHT = "right"
 PAN_UP = "up"
 PAN_DOWN = "down"
-TRANSITION_FADE = "fade"       # M3 实现；M2 仅校验存储
+TRANSITION_FADE = "fade"
+TRANSITION_DISSOLVE = "dissolve"
+TRANSITION_SLIDE = "slide"
+TRANSITION_TYPES = frozenset({TRANSITION_FADE, TRANSITION_DISSOLVE, TRANSITION_SLIDE})
+XFADE_TYPE_MAP: dict[str, str] = {
+    TRANSITION_FADE: "fade",
+    TRANSITION_DISSOLVE: "dissolve",
+    TRANSITION_SLIDE: "slideleft",
+}
 IMAGE_MIN_DURATION = 0.5       # 图片镜头最短时长（秒）
 IMAGE_MAX_DURATION = 30.0      # 图片镜头最长时长（秒）
+ZOOM_MIN = 0.5                 # Ken Burns 缩放范围
+ZOOM_MAX = 3.0
 SUBTITLE_STYLE_DEFAULT = "default"
 SRT_TIMESTAMP_FORMAT = "%02d:%02d:%02d,%03d"
+
+# ── ASS 字幕样式（M4）─────────────────────────────────────
+
+SUBTITLE_FONT = "Microsoft YaHei"
+SUBTITLE_STYLES: dict[str, dict[str, int]] = {
+    # size: 字号；outline: 描边；margin_v: 底/顶边距；alignment: ASS 对齐（2 底中 / 8 顶中）
+    "default": {"size": 42, "outline": 2, "margin_v": 40, "alignment": 2},
+    "large": {"size": 56, "outline": 3, "margin_v": 48, "alignment": 2},
+    "top": {"size": 44, "outline": 2, "margin_v": 60, "alignment": 8},
+    "minimal": {"size": 36, "outline": 1, "margin_v": 24, "alignment": 2},
+}
+
+# ── 音频侧链（M4：旁白优先压 BGM）─────────────────────────
+
+SIDECHAIN_THRESHOLD = "0.05"
+SIDECHAIN_RATIO = "6"
+SIDECHAIN_ATTACK = "20"
+SIDECHAIN_RELEASE = "300"
+
+# ── TTS 长文本（M4）───────────────────────────────────────
+
+TTS_SPLIT_MAX_CHARS = 80
+TTS_SPLIT_DELIMITERS = "。！？；!?;\n"
+MSG_TTS_SPLIT_FAILED = "长文本分句合成失败"
 
 # ── TTS / 音乐生成（composer/tts.py / music.py）────────────
 
@@ -240,10 +274,16 @@ FFMPEG_AUDIO_BITRATE = "192k"
 FFMPEG_AUDIO_SAMPLE_RATE = 44100
 FFMPEG_PIX_FMT = "yuv420p"
 
+# 编码参数默认值（M4 可配置；config 的 encoding 段覆盖）
+ENCODING_PRESET_DEFAULT = FFMPEG_VIDEO_PRESET
+ENCODING_CRF_DEFAULT = 23
+ENCODING_AUDIO_BITRATE_DEFAULT = FFMPEG_AUDIO_BITRATE
+
 RENDER_DIR = "renders"
 RENDER_SEGMENT_DIR = "segments"
 RENDER_OUTPUT_NAME = "output.mp4"
 RENDER_SUBTITLES_NAME = "subtitles.srt"
+RENDER_ASS_NAME = "subtitles.ass"
 RENDER_SEGMENT_PATTERN = "seg_%03d.mp4"
 RENDER_CONCAT_LIST_NAME = "segments.txt"
 RENDER_LOG_DIR = "logs"

@@ -7,6 +7,26 @@
 
 ## 待发布
 
+## 0.37.0
+
+### 添加
+- **视频合成器 M4：高级合成**（规划见 PLAN.md §11 M4）
+  - **xfade 转场**：fade / dissolve / slide，拼接阶段两两合并（任意段转场 > 0 时走 xfade 链，否则保留 concat 快路径）；成片总时长自动扣除转场重叠
+  - **Ken Burns 运镜**：图片镜头 `zoompan`（from/to zoom + 左右上下 pan，2× 预放大），校验缩放范围 [0.5, 3] 且 `to_zoom ≥ from_zoom`
+  - **ASS 样式字幕**：内置 default / large / top / minimal 四套样式（字号 / 描边 / 底/顶位置），mux 阶段 `ass=` 烧录；SRT 下载端点不变
+  - **音频进阶**：旁白 + BGM 侧链压缩（`sidechaincompress`，旁白出现时自动压低 BGM），BGM 轨新增 `ducking` 开关；保留 loop / fade in/out
+  - **TTS 进阶**：长文本（>80 字）按中英文标点自动分句合成 + ffmpeg concat 为单条音频；`segments` 多说话人对话合成（REST 与 `composer_tts` 工具均支持）
+  - **编码参数可配置**：`/api/composer/config` 新增 `encoding {preset, crf, audio_bitrate}`，渲染命令实时读取
+- 前端分镜编辑器：转场类型下拉、Ken Burns 缩放/平移参数、字幕样式下拉、BGM「旁白时压低」勾选；素材库 TTS「长文本自动分句」勾选
+- `deploy/README.md` 补充 ACE-Step 主题曲 sidecar 契约（可选，不新增安装脚本）
+
+### 修复
+- **转场路径总时长重复扣减**：xfade 分支已按累计时长计算，修复再次减去转场时长导致成片变短（9s − 1.8s 应为 7.2s，原输出 5.4s）
+- **xfade 路径 mux 输入错误**：mux 阶段误用固定 `merged.mp4`，改为使用实际拼接产物（`xfade_*.mp4`）
+
+### 文档
+- **README**：M4 能力说明、`tts.py` / `ffmpeg.py` / `queue.py` 模块描述、下一步计划标记 M4 完成
+
 ## 0.36.0
 
 ### 添加
