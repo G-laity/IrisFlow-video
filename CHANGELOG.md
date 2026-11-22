@@ -7,6 +7,33 @@
 
 ## 待发布
 
+## 0.39.0
+
+### 添加
+- **前端无障碍基础（P0）**
+  - 全局 `:focus-visible` 焦点样式（键盘 Tab 可见，覆盖组件内 `outline:none`）
+  - `@media (prefers-reduced-motion: reduce)` 全局关闭动画/过渡
+  - 图标按钮补 `aria-label`：浮窗置顶/关闭、App 浮动按钮、会话菜单、媒体预览、渲染刷新、发送到合成器
+  - `FloatingWindow` 增加 `role="dialog"` / `aria-modal` / `aria-label`
+  - 折叠控件 `aria-expanded`（原始数据折叠）、设置标签页 `role=tablist/tab` + `aria-selected`；状态点 `role=img` + 描述
+- **动效（P1）**
+  - 浮窗开合：`opacity + translate(8px) + scale(.98)`，使用独立 transform 属性与定位 `transform` 共存；拖拽时禁用过渡
+  - 消息入场：工作流日志/消息气泡淡入 + 上移 4px（仅挂载触发，流式更新不重播）
+  - 会话列表按索引交错入场（延迟按 30ms 递增，封顶 12 项）
+  - Esc 关闭顶层浮窗：确认 `windowZIndex` 既有实现，回归通过（未重复实现）
+- **视觉质感（P2 部分）**
+  - 浮窗玻璃拟态：半透明背景（`color-mix` + 实色回退）+ `backdrop-filter: blur(14px)` + 细边框
+  - 强调辉光：工具栏激活按钮、生成中状态点
+
+### 变更
+- 焦点样式提升优先级（`!important`）以覆盖局部 `outline: none`，不改变元素圆角
+- 渲染完成 toast 增加 `role="status"` / `aria-live`
+
+### 文档
+- CLAUDE.md 前端架构补充无障碍/动效约定；CHANGELOG 本条
+
+> 未包含：P2 明暗主题（待产品决策）、P3 性能优化（Markdown 懒加载、图片懒加载等，另排期）。
+
 ## 0.38.2
 
 ### 文档
