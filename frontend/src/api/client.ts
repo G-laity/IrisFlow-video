@@ -4,6 +4,10 @@ import type {
   AgentContinueRequest,
   AgentResponse,
   AppInfo,
+  ComposerAsset,
+  ComposerAssetListResponse,
+  ComposerConfigResponse,
+  ComposerImportResponse,
   ConversationCreateRequest,
   ConversationDetail,
   ConversationListResponse,
@@ -297,6 +301,73 @@ export function updateSecrets(secrets: Record<string, string | null>): Promise<{
 
 export function getUploadConfig(): Promise<UploadConfig> {
   return request<UploadConfig>("GET", "/upload/config");
+}
+
+// ── 视频合成器（/api/composer）────────────────────
+
+export function listComposerAssets(kind?: string): Promise<ComposerAssetListResponse> {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : "";
+  return request<ComposerAssetListResponse>("GET", `/composer/assets${q}`);
+}
+
+export function importComposerAssetUrl(url: string, kind?: string): Promise<ComposerImportResponse> {
+  return request<ComposerImportResponse>("POST", "/composer/assets", { url, kind: kind ?? null });
+}
+
+export function uploadComposerAsset(file: File): Promise<ComposerImportResponse> {
+  return uploadComposerFile<ComposerImportResponse>("/composer/assets/upload", file);
+}
+
+export function deleteComposerAsset(assetId: string): Promise<{ ok: boolean; deleted: string }> {
+  return request<{ ok: boolean; deleted: string }>("DELETE", `/composer/assets/${assetId}`);
+}
+
+export function getComposerConfig(): Promise<ComposerConfigResponse> {
+  return request<ComposerConfigResponse>("GET", "/composer/config");
+}
+
+export function updateComposerConfig(
+  updates: Partial<Record<string, unknown>>,
+): Promise<ComposerConfigResponse> {
+  return request<ComposerConfigResponse>("PUT", "/composer/config", updates);
+}
+
+/** 素材文件流地址（图片 / 视频 / 音频播放，后端支持 Range）。 */
+export function composerAssetFileUrl(assetId: string): string {
+  return apiUrl(`${BASE}/composer/assets/${assetId}/file`);
+}
+
+/** multipart 文件上传（合成器素材等非 JSON 请求）。 */
+async function uploadComposerFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(apiUrl(`${BASE}${path}`), {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(15 * 60_000), // 大文件上传需要长超时
+  });
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "Unknown error");
+    const err = new Error(text) as Error & { status: number };
+    (err as any).status = resp.status;
+    throw err;
+  }
+  return resp.json();
+}
+
+/** 订阅合成器事件流（SSE）：素材入库 / 删除实时推送。 */
+export async function subscribeComposerEvents(
+  signal?: AbortSignal,
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  const resp = await fetchWithConnTimeout(apiUrl(`${BASE}/composer/status-stream`), {
+    signal,
+  }, FETCH_TIMEOUT);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "Unknown error");
+    throw new Error(text);
+  }
+  if (!resp.body) throw new Error("Response body is null");
+  return resp.body.getReader();
 }
 
 // ── 生成流重连 ──────────────────────────────────────

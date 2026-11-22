@@ -326,11 +326,47 @@ export const UI_FILE_NAME = "文件名";
 export const UI_CONTENT_PREVIEW = "内容预览";
 export const UI_NO_TEXT_CONTENT = "无文本内容";
 
+// ── 视频合成器（ComposerPanel / AssetLibrary）────────────
+
+export const COMPOSER_SSE_ASSET = "composer_asset";
+export const COMPOSER_SSE_CONNECTED = "composer_connected";
+export const COMPOSER_KIND_IMAGE = "image";
+export const COMPOSER_KIND_VIDEO = "video";
+export const COMPOSER_KIND_AUDIO = "audio";
+export const COMPOSER_KIND_ALL = "all";
+export const COMPOSER_KINDS = [COMPOSER_KIND_ALL, COMPOSER_KIND_IMAGE, COMPOSER_KIND_VIDEO, COMPOSER_KIND_AUDIO] as const;
+export const COMPOSER_MAX_UPLOAD_MB = 500;      // 素材上传上限（与后端一致）
+export const COMPOSER_ASSET_RECONNECT_DELAY = 3000;  // SSE 断线重连延迟（ms）
+export const COMPOSER_SSE_READ_TIMEOUT = 30 * 60_000; // 素材事件流读取超时（ms）
+export const COMPOSER_DELETE_CONFIRM = "确认删除该素材？删除后不可恢复。";
+
+// 素材类型 → 图标（对齐 toolMetadata 的 FA 风格）
+export const COMPOSER_KIND_ICONS: Record<string, string> = {
+  [COMPOSER_KIND_IMAGE]: "fa-solid fa-image",
+  [COMPOSER_KIND_VIDEO]: "fa-solid fa-video",
+  [COMPOSER_KIND_AUDIO]: "fa-solid fa-music",
+};
+
 // ── 杂项 ─────────────────────────────────────────
 
 export const UI_SESSION_LIST = "会话列表";
 export const UI_SETTINGS = "设置";
 export const UI_OPEN_TOOL_PANEL = "打开工具管理浮窗";
+
+// ── 合成器面板 UI 文案 ────────────────────────────
+
+export const UI_COMPOSER = "视频合成器";
+export const UI_TAB_ASSETS = "素材";
+export const UI_TAB_PROJECTS = "项目";
+export const UI_TAB_TIMELINE = "时间轴";
+export const UI_TAB_RENDERS = "渲染";
+export const UI_ASSET_IMPORT_URL = "URL 导入";
+export const UI_ASSET_UPLOAD = "上传素材";
+export const UI_ASSET_URL_PLACEHOLDER = "粘贴图片 / 视频 / 音频 URL";
+export const UI_ASSET_IMPORTING = "导入中…";
+export const UI_ASSET_NO_ASSETS = "暂无素材";
+export const UI_ASSET_DEDUP_HIT = "已存在相同素材，已复用";
+export const UI_COMPOSER_FFMPEG_MISSING = "未检测到 ffmpeg，探测元数据不可用";
 
 /** MCP 服务器状态 ID → 展示文案 */
 export const MCP_STATUS_LABEL: Record<string, string> = {

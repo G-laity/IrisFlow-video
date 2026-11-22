@@ -5,8 +5,9 @@ import ChatPanel from "./components/ChatPanel.vue";
 import WorkflowDetail from "./components/floating/WorkflowDetail.vue";
 import MediaPreview from "./components/floating/MediaPreview.vue";
 import SettingsPanel from "./components/floating/SettingsPanel.vue";
+import ComposerPanel from "./components/floating/ComposerPanel.vue";
 import { getLLMConfig, ping, getServerUrl, setServerUrl } from "./api/client";
-import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
+import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_COMPOSER, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_CONVERSATION_LIST_KEY, REMOVE_SESSION_CACHE_KEY } from "./composables/injectionKeys";
 import { discoverTools } from "./composables/toolMetadata";
 import type { WorkflowEntry, PreviewPayload } from "./types/api";
@@ -17,6 +18,7 @@ function onServerUrlInput(e: Event) {
 
 const model = ref("");
 const showSettings = ref(false);
+const showComposer = ref(false);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null);
 
@@ -131,9 +133,10 @@ function handleUpdateSettings(cfg: { model: string }) {
 
 // ── 单例窗口显现（不可重复创建）───────────────
 
-function showWindow(type: 'conversations' | 'settings') {
+function showWindow(type: 'conversations' | 'settings' | 'composer') {
   if (type === 'conversations') showConversationList.value = true;
-  else showSettings.value = true;
+  else if (type === 'settings') showSettings.value = true;
+  else showComposer.value = true;
 }
 </script>
 
@@ -153,6 +156,12 @@ function showWindow(type: 'conversations' | 'settings') {
       @update="handleUpdateSettings"
     />
   </div>
+
+  <!-- 合成器浮窗（素材库 M1；项目/时间轴/渲染随 M2/M3 开放） -->
+  <ComposerPanel
+    v-model="showComposer"
+    @preview="onPreview"
+  />
 
   <!-- 会话浮岛（持久：关闭仅隐藏不销毁，默认显示） -->
   <ConversationList
@@ -183,6 +192,15 @@ function showWindow(type: 'conversations' | 'settings') {
     :title="UI_SESSION_LIST"
   >
     <i class="fa-solid fa-bars"></i>
+  </button>
+
+  <!-- 合成器按钮（右上角，设置按钮下方） -->
+  <button
+    class="floating-toggle floating-toggle--tr2"
+    @click="showWindow('composer')"
+    :title="UI_COMPOSER"
+  >
+    <i class="fa-solid fa-clapperboard"></i>
   </button>
 
   <!-- 设置按钮（右上角） -->
@@ -264,6 +282,7 @@ function showWindow(type: 'conversations' | 'settings') {
   &.floating-toggle--tl { top: 12px; left: 12px; }
   &.floating-toggle--bl { bottom: 12px; left: 12px; }
   &.floating-toggle--tr { top: 12px; right: 12px; }
+  &.floating-toggle--tr2 { top: 50px; right: 12px; }
 }
 
 /* ═══════════════════════════════════════════════════

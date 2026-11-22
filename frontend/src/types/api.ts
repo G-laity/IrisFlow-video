@@ -218,6 +218,70 @@ export type PreviewPayload =
   | { kind: "video"; src: string; filename?: string }
   | { kind: "webpage"; url: string; title?: string };
 
+// ── 视频合成器（/api/composer）──────────────────────
+
+/** 素材类型 */
+export type ComposerAssetKind = "image" | "video" | "audio" | "unknown";
+
+/** 素材探测元数据（ffprobe） */
+export interface ComposerAssetProbe {
+  duration?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  vcodec?: string;
+  acodec?: string;
+  has_audio?: boolean;
+}
+
+/** 素材记录 */
+export interface ComposerAsset {
+  asset_id: string;
+  kind: ComposerAssetKind;
+  source: "upload" | "url" | string;
+  url: string;
+  file_path: string;
+  sha256: string;
+  size_bytes: number;
+  probe: ComposerAssetProbe;
+  meta: Record<string, unknown>;
+  ref_count: number;
+  created_at: string;
+}
+
+export interface ComposerAssetListResponse {
+  assets: ComposerAsset[];
+}
+
+export interface ComposerImportResponse {
+  asset: ComposerAsset;
+  duplicated: boolean;
+  warnings: string[];
+}
+
+export interface ComposerPreset {
+  width: number;
+  height: number;
+  fps: number;
+}
+
+/** 合成器配置快照 */
+export interface ComposerConfig {
+  ffmpeg_path: string;
+  disk_limit_bytes: number;
+  render_concurrency: number;
+  presets: Record<string, ComposerPreset>;
+}
+
+export interface ComposerConfigResponse {
+  config: ComposerConfig;
+  ffmpeg_available: boolean;
+  ffprobe_available: boolean;
+  ffmpeg_path: string;
+  ffprobe_path: string;
+  error: string;
+}
+
 /** 应用基本信息（来自 GET /） */
 export interface AppInfo {
   name: string;
