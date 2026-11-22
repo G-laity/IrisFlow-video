@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.33.1-green)]()
+[![Version](https://img.shields.io/badge/版本-0.34.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -75,6 +75,7 @@
 | [Node.js](https://nodejs.org/) | **24** | 前端运行时 |
 | [pnpm](https://pnpm.io/installation) | 最新版 | Node 包管理 |
 | [Git](https://git-scm.com/) | 最新版 | 版本控制 |
+| [ffmpeg](https://ffmpeg.org/download.html)（可选） | 任意较新版本 | 视频合成器素材探测与渲染 |
 
 ### 1. 克隆仓库
 
@@ -110,7 +111,22 @@ pnpm dev                                       # 启动开发服务器
 
 打开浏览器访问 `http://localhost:3000` 即可看到控制台页面。
 
-### 4. 初始配置
+### 4. 安装 ffmpeg（视频合成器可选）
+
+合成器素材库的元数据探测与后续渲染依赖 ffmpeg / ffprobe。启动时自动探测（配置路径 → 系统 `PATH`），缺失不阻塞启动，合成器面板会显示提示。
+
+```bash
+# Windows（winget）
+winget install Gyan.FFmpeg
+
+# Windows（官网下载，解压后需自行加入 PATH，或在合成器设置中配置路径）
+#   https://ffmpeg.org/download.html
+
+# Linux（Debian / Ubuntu）
+sudo apt install ffmpeg
+```
+
+### 5. 初始配置
 
 首次使用需在控制台 **设置面板** 中配置：
 
@@ -123,7 +139,7 @@ pnpm dev                                       # 启动开发服务器
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.33.1",...}
+# → {"name":"IrisFlow","version":"0.34.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -149,6 +165,12 @@ curl http://localhost:8000/api/health
 | `/api/llm/config` `/api/llm/concurrency` | GET / PUT · GET | LLM 配置 / 并发上限 |
 | `/api/session-settings/default` | GET / PUT | 会话默认采样参数 |
 | `/api/secrets` | GET / PUT | 密钥库（值不回传，仅 key 列表） |
+| `/api/composer/assets` | GET / POST | 素材列表（kind 过滤）/ URL 导入（hash 去重 + ffprobe 探测） |
+| `/api/composer/assets/upload` | POST | 素材上传（500 MB 上限，仅媒体类型） |
+| `/api/composer/assets/{id}` | GET / DELETE | 素材详情（探测元数据）/ 删除（引用计数校验） |
+| `/api/composer/assets/{id}/file` | GET | 素材流式播放（支持 HTTP Range） |
+| `/api/composer/status-stream` | GET | 合成器事件流（SSE：素材入库 / 删除） |
+| `/api/composer/config` | GET / PUT | 合成器配置 + ffmpeg 探测结果 |
 
 ## 📂 项目结构
 
@@ -174,6 +196,12 @@ IrisFlow/
 │   │   ├── constants.py          #   全模块共享常量（会话状态、消息角色、SSE 事件类型）
 │   │   ├── models.py             #   Pydantic 模型（Chat/Agent/Tool/会话）
 │   │   └── router.py             #   REST 路由 + 统一队列调度 + LLM 健康门控
+│   ├── composer/                 # IRIS VIDEO COMPOSER — 视频合成器域包
+│   │   ├── config.py             #   合成器配置（composer_config.json + 分辨率预设）
+│   │   ├── store.py              #   ComposerStore — SQLite 三表（projects/assets/renders）
+│   │   ├── assets.py             #   素材服务 — URL 下载 + hash 去重 + MIME 判型 + ffprobe 探测
+│   │   ├── ffmpeg.py             #   ffmpeg/ffprobe 定位 + 启动探测 + 元数据探测
+│   │   └── router.py             #   REST + SSE 路由（素材库 / 配置 / 状态流）
 │   ├── data/                     # 配置 JSON + SQLite 数据库（sessions.db）
 │   ├── pyproject.toml
 │   └── pyrightconfig.json
@@ -182,7 +210,7 @@ IrisFlow/
 │   │   ├── App.vue               #   根组件 — 会话列表 + 聊天面板 + 动态浮窗 + 心跳
 │   │   ├── api/client.ts         #   fetch 封装 + SSE 流式 + 可配置后端地址
 │   │   ├── constants.ts          #   全模块共享常量
-│   │   ├── composables/          #   useAgent + drafts + toolMetadata + windowZIndex
+│   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + windowZIndex
 │   │   ├── utils/                #   纯函数 + Markdown 渲染 + 媒体类型判定
 │   │   └── components/           #   Vue SFC 组件
 │   │       ├── floating/          #     浮窗子窗体（全部基于 FloatingWindow 框架）
@@ -191,7 +219,10 @@ IrisFlow/
 │   │       │   ├── SettingsPanel.vue     #     设置面板 — 服务器/LLM/MCP/密钥/默认参数/关于 + 全量配置持久化
 │   │       │   ├── ToolGroupPanel.vue    #     工具管理浮窗 — MCP 服务器工具组开关
 │   │       │   ├── WorkflowDetail.vue    #     工作流详情 — 工具调用 / 结果 / 思考过程查看
+│   │       │   ├── ComposerPanel.vue     #     合成器主浮窗 — 素材库标签页（M1）+ 项目/时间轴/渲染占位
 │   │       │   └── MediaPreview.vue      #     统一媒体预览 — 图片/视频/网页 + 文件 Markdown 渲染
+│   │       ├── composer/         #     合成器子组件
+│   │       │   └── AssetLibrary.vue      #     素材库 — 网格缩略图 + 过滤 + 上传 + URL 导入 + 删除
 │   │       ├── ChatPanel.vue      #     聊天面板 — 消息滚动 + 会话加载
 │   │       ├── ChatInput.vue      #     输入框 — 工具切换 + 思考开关 + 文件上传
 │   │       ├── MessageBubble.vue  #     消息气泡 — Markdown 渲染 + 思考过程
@@ -275,18 +306,13 @@ graph TD
 
 ### 🎬 视频合成器（IRIS VIDEO COMPOSER）
 
-将 IrisFlow 生成的各类媒体素材整合为完整视频：
+将 IrisFlow 生成的各类媒体素材整合为完整视频（规划详见 [PLAN.md](./PLAN.md)）：
 
-- **素材接入**：汇聚 `agnes_video_create` 生成的视频片段、`agnes_image_generate` 生成的图片、音频（语音合成 / 背景音乐）与字幕文本
-- **时间轴编排**：由 LLM 根据脚本规划素材顺序、时长与镜头节奏，生成可编辑的时间轴
-- **合成渲染**：
-  - 视频片段拼接 + 转场效果
-  - 图片镜头（Ken Burns 运镜 / 定格时长）插入
-  - 字幕烧录（SRT 生成 + 样式化渲染）
-  - 音频轨道混合（旁白 + 背景音乐 + 音量调节）
-- **产物交付**：导出 MP4，在控制台内直接预览与下载
-
-预计技术方案：ffmpeg / moviepy 渲染管线 + 后端合成任务队列 + 前端时间轴预览界面。
+- ✅ **M1 · 素材管线（0.34.0）**：素材库落地——URL 导入 / 本地上传（500 MB、仅媒体类型）、sha256 去重、ffprobe 元数据探测、hash 分桶存储、引用计数删除、合成器浮窗（网格缩略图 + 类型过滤）、SSE 实时推送、ffmpeg 启动探测与可配置路径
+- ⬜ **M2 · 时间轴 + 编排 + 语音/音乐生成（0.35.0）**：时间轴 Schema 与校验、Agent 八工具集、TTS（CosyVoice/SiliconFlow/edge-tts 三级降级）与 BGM（Stable Audio Open）生成、分镜编辑器
+- ⬜ **M3 · 渲染 MVP（0.36.0）**：ffmpeg 分段渲染管线 + 渲染队列 + 进度推送 + 出片下载
+- ⬜ **M4 · 高级合成（0.37.0）**：转场 / Ken Burns 运镜 / ASS 样式字幕 / 音频进阶 / ACE-Step 主题曲
+- ⬜ **M5 · 体验完善（0.38.0）**：轨道式时间轴 / 项目模板 / 磁盘回收策略
 
 ## 📄 许可证
 

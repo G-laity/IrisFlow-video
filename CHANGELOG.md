@@ -7,6 +7,19 @@
 
 ## 待发布
 
+## 0.34.0
+
+### 添加
+- **视频合成器 M1 素材管线（IRIS VIDEO COMPOSER）**：新增 `backend/composer/` 域包（规划见 PLAN.md）——`store.py`（ComposerStore：SQLite 三表 projects/assets/renders + 单写者锁 + 引用计数）、`assets.py`（URL 流式下载 + sha256 去重 + MIME 白名单判型 + ffprobe 探测 + hash 分桶存储）、`ffmpeg.py`（ffmpeg/ffprobe 定位 + 启动探测 + 元数据探测，图片 codec 识别剔除）、`config.py`（`composer_config.json`：ffmpeg 路径 / 磁盘上限 / 渲染并发 / 分辨率预设表）、`router.py`（REST + SSE）
+- **素材库 API**：`/api/composer/assets`（列表 kind 过滤 / URL 导入）、`/assets/upload`（500 MB 上限、仅媒体类型）、`/assets/{id}`（详情含探测元数据 / 删除引用计数校验）、`/assets/{id}/file`（HTTP Range 流式播放）、`/status-stream`（SSE 素材事件 + 心跳）、`/config`（配置读写 + ffmpeg 探测结果）
+- **前端合成器面板**：`ComposerPanel.vue`（FloatingWindow 主浮窗，素材页启用、项目/时间轴/渲染占位）+ `AssetLibrary.vue`（网格缩略图 + 类型过滤 + 上传 + URL 导入 + 删除）+ `useComposer.ts`（模块级单例 + SSE 断线重连），入口按钮位于右上角；素材预览复用 MediaPreview 本地流播放
+
+### 变更
+- **Agent 迭代上限常量化可配置**：`MAX_TOOL_ITERATIONS` 进 `llm/constants.py`，`llm_config.json` 新增 `max_tool_iterations` 键（默认 10），`Agent` 构造处读取配置值。纯重构，无行为变化
+
+### 文档
+- **README**：环境要求补 ffmpeg（可选）、快速开始新增 ffmpeg 安装指引、API 一览登记 6 个 composer 端点、项目结构更新、下一步计划标记 M1 完成
+
 ## 0.33.1
 
 ### 修复

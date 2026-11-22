@@ -215,6 +215,8 @@ async def _generate(
               session_id, chat.model, request.thinking,
               len(request.tool_names) if request.tool_names else 0)
 
+    from core.config import get_max_tool_iterations
+
     async def _emit(event: dict[str, object]) -> None:
         """向事件列表追加事件并通知所有等待者。"""
         async with state.condition:
@@ -313,6 +315,7 @@ async def _generate(
                             tools=resolved_tools or [],
                             temperature=chat.temperature,
                             max_tokens=chat.max_tokens,
+                            max_iterations=get_max_tool_iterations(),
                             top_p=chat.top_p,
                             top_k=chat.top_k,
                             presence_penalty=chat.presence_penalty,
@@ -911,6 +914,7 @@ class LLMConfigResponse(BaseModel):
     base_url: str = Field(description="LLM 网关地址")
     default_model: str = Field(description="默认模型 ID")
     auth_token: str = Field(description="认证令牌（可能含 ${VAR} 占位符，实际请求时自动替换）")
+    max_tool_iterations: int = Field(description="自定义工具暂停-继续循环的最大轮次")
 
 
 class LLMConfigUpdateRequest(BaseModel):
@@ -920,17 +924,19 @@ class LLMConfigUpdateRequest(BaseModel):
     auth_token: str | None = Field(default=None, description="认证令牌")
     model: str | None = Field(default=None, description="默认模型 ID")
     max_concurrent: int | None = Field(default=None, description="最大并发生成数")
+    max_tool_iterations: int | None = Field(default=None, description="自定义工具循环最大轮次")
 
 
 @router.get("/api/llm/config", response_model=LLMConfigResponse)
 async def llm_config():
     """获取当前 LLM 配置信息。"""
-    from core.config import get_base_url, get_default_model, get_raw_auth_token
+    from core.config import get_base_url, get_default_model, get_raw_auth_token, get_max_tool_iterations
 
     return LLMConfigResponse(
         base_url=get_base_url(),
         default_model=get_default_model(),
         auth_token=get_raw_auth_token(),
+        max_tool_iterations=get_max_tool_iterations(),
     )
 
 
@@ -939,13 +945,14 @@ async def llm_config_update(request: LLMConfigUpdateRequest):
     """更新 LLM 运行时配置（前端设置面板保存）。"""
     from core.config import apply_llm_overrides
 
-    _log.info("LLM 配置更新: base_url=%s, model=%s, max_concurrent=%s",
-              request.base_url, request.model, request.max_concurrent)
+    _log.info("LLM 配置更新: base_url=%s, model=%s, max_concurrent=%s, max_tool_iterations=%s",
+              request.base_url, request.model, request.max_concurrent, request.max_tool_iterations)
     apply_llm_overrides(
         base_url=request.base_url,
         auth_token=request.auth_token,
         model=request.model,
         max_concurrent=request.max_concurrent,
+        max_tool_iterations=request.max_tool_iterations,
     )
     return {RESPONSE_KEY_OK: True}
 

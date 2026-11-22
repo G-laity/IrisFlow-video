@@ -24,6 +24,7 @@ from core import router as core_router
 from core.config import app_config
 from llm.constants import CORS_ORIGIN, MCP_RELOAD_TIMEOUT
 from llm import router as llm_router
+from composer.router import router as composer_router
 
 # ── 日志配置 ──────────────────────────────────────────
 
@@ -75,6 +76,14 @@ async def lifespan(app: FastAPI):
             )
         except Exception:
             _log.exception("MCP 初始化异常，后台健康检查将继续监控")
+
+    # ── 启动：ffmpeg / ffprobe 探测（失败不阻塞启动）──
+    try:
+        from composer import config as composer_config
+        from composer import ffmpeg as composer_ffmpeg
+        await composer_ffmpeg.refresh_availability(composer_config.get_ffmpeg_path())
+    except Exception:
+        _log.exception("ffmpeg 启动探测异常（不影响启动，合成器功能将报告缺失）")
 
     # ── 启动：清理过时的 PENDING 会话（上次运行中断残留）──
     try:
@@ -135,3 +144,4 @@ async def log_requests(request: Request, call_next: Callable[[Request], Awaitabl
 
 app.include_router(core_router)
 app.include_router(llm_router)
+app.include_router(composer_router)

@@ -19,6 +19,10 @@ _MAX_CONCURRENT = "max_concurrent"
 _MCP_SERVERS = "mcpServers"
 _KEY_NAME = "name"
 
+# 迭代上限配置键从 llm.constants 导入会导致循环引用（config → llm.constants
+# → llm.agent → llm.client → config），故与 _BASE_URL 等同定义于此。
+_MAX_TOOL_ITERATIONS = "max_tool_iterations"
+
 _log = logging.getLogger(__name__)
 
 # ── 日志常量 ──────────────────────────────────────────────
@@ -144,6 +148,7 @@ _override_base_url: str | None = _get_persisted_str(_BASE_URL)
 _override_auth_token: str | None = _get_persisted_str(_AUTH_TOKEN)
 _override_model: str | None = _get_persisted_str(_MODEL)
 _override_max_concurrent: int | None = _get_persisted_int(_MAX_CONCURRENT)
+_override_max_tool_iterations: int | None = _get_persisted_int(_MAX_TOOL_ITERATIONS)
 
 
 def get_base_url() -> str:
@@ -171,14 +176,22 @@ def get_max_concurrent() -> int:
     return _override_max_concurrent if _override_max_concurrent is not None else 1
 
 
+def get_max_tool_iterations() -> int:
+    """获取自定义工具暂停-继续循环的最大轮次（默认 10）。"""
+    from llm.constants import MAX_TOOL_ITERATIONS
+    return _override_max_tool_iterations if _override_max_tool_iterations is not None else MAX_TOOL_ITERATIONS
+
+
 def apply_llm_overrides(
     base_url: str | None = None,
     auth_token: str | None = None,
     model: str | None = None,
     max_concurrent: int | None = None,
+    max_tool_iterations: int | None = None,
 ) -> None:
     """应用前端传入的 LLM 配置覆盖并持久化。"""
     global _override_base_url, _override_auth_token, _override_model, _override_max_concurrent
+    global _override_max_tool_iterations
     if base_url is not None and base_url.strip():
         _override_base_url = base_url.strip().rstrip("/")
     if auth_token is not None:
@@ -187,12 +200,15 @@ def apply_llm_overrides(
         _override_model = model
     if max_concurrent is not None:
         _override_max_concurrent = max_concurrent
+    if max_tool_iterations is not None:
+        _override_max_tool_iterations = max(1, max_tool_iterations)
 
     _save_config_file({
         _BASE_URL: _override_base_url,
         _AUTH_TOKEN: _override_auth_token,
         _MODEL: _override_model,
         _MAX_CONCURRENT: _override_max_concurrent,
+        _MAX_TOOL_ITERATIONS: _override_max_tool_iterations,
     })
 
 

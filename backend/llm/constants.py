@@ -128,6 +128,74 @@ OPEN_URL_RETRY_DELAY = 0.5      # 打开网页重试间隔（秒）
 OPEN_URL_TRUNCATE = 4000        # 网页内容截断长度（字符）
 TOOL_EXECUTION_TIMEOUT = 600.0  # 工具执行硬超时（秒）—— 图片/视频生成需要 3-10 分钟
 
+# ── Agent 工具循环（agent.py）───────────────────────────────
+
+MAX_TOOL_ITERATIONS = 10  # 自定义工具暂停-继续循环最大轮次（可通过 llm_config 配置）
+CONFIG_MAX_TOOL_ITERATIONS = "max_tool_iterations"  # 持久化配置键
+
+# ── 视频合成器（composer/ 包）───────────────────────────────
+
+COMPOSER_ID_LENGTH = 12                 # composer 各类 ID 字符长度
+COMPOSER_ID_PREFIX_ASSET = "as_"        # 素材 ID 前缀
+COMPOSER_ID_PREFIX_PROJECT = "pr_"      # 项目 ID 前缀（M2 启用）
+COMPOSER_ID_PREFIX_RENDER = "rd_"       # 渲染 ID 前缀（M3 启用）
+
+MB_BYTES = 1024 * 1024                  # 兆字节换算（uploads / composer 共用）
+
+COMPOSER_KIND_VIDEO = "video"
+COMPOSER_KIND_IMAGE = "image"
+COMPOSER_KIND_AUDIO = "audio"
+COMPOSER_KIND_UNKNOWN = "unknown"
+
+COMPOSER_SOURCE_UPLOAD = "upload"       # 本地上传
+COMPOSER_SOURCE_URL = "url"             # URL 导入
+
+COMPOSER_MAX_UPLOAD_SIZE = 500 * MB_BYTES  # 素材上传 / URL 下载上限（500 MB）
+COMPOSER_DISK_LIMIT_BYTES = 5 * 1024 * MB_BYTES  # data/composer 磁盘水位上限（5 GB，M3 告警）
+COMPOSER_RENDER_CONCURRENCY = 1         # 渲染并发（M3 启用）
+COMPOSER_HTTP_TIMEOUT = 300.0           # 素材 URL 下载超时（秒）—— 大文件需要较长窗口
+COMPOSER_PROBE_TIMEOUT = 30.0           # ffprobe 子进程超时（秒）
+COMPOSER_HASH_CHUNK = 1024 * 1024       # sha256 分块大小（1 MB）
+COMPOSER_STREAM_CHUNK = 1024 * 1024     # Range 流式响应分块大小（1 MB）
+
+COMPOSER_SSE_ASSET = "composer_asset"       # SSE：素材入库 / 删除
+COMPOSER_SSE_CONNECTED = "composer_connected"  # SSE：连接快照
+COMPOSER_SSE_HEARTBEAT = 15.0                # composer SSE 心跳间隔（秒）
+
+# 素材 MIME 白名单：扩展名 → (kind, Content-Type)
+COMPOSER_MEDIA_EXTS: dict[str, tuple[str, str]] = {
+    # 图片
+    ".jpg": (COMPOSER_KIND_IMAGE, "image/jpeg"),
+    ".jpeg": (COMPOSER_KIND_IMAGE, "image/jpeg"),
+    ".png": (COMPOSER_KIND_IMAGE, "image/png"),
+    ".gif": (COMPOSER_KIND_IMAGE, "image/gif"),
+    ".webp": (COMPOSER_KIND_IMAGE, "image/webp"),
+    ".bmp": (COMPOSER_KIND_IMAGE, "image/bmp"),
+    # 视频
+    ".mp4": (COMPOSER_KIND_VIDEO, "video/mp4"),
+    ".mov": (COMPOSER_KIND_VIDEO, "video/quicktime"),
+    ".mkv": (COMPOSER_KIND_VIDEO, "video/x-matroska"),
+    ".webm": (COMPOSER_KIND_VIDEO, "video/webm"),
+    ".avi": (COMPOSER_KIND_VIDEO, "video/x-msvideo"),
+    # 音频
+    ".mp3": (COMPOSER_KIND_AUDIO, "audio/mpeg"),
+    ".wav": (COMPOSER_KIND_AUDIO, "audio/wav"),
+    ".m4a": (COMPOSER_KIND_AUDIO, "audio/mp4"),
+    ".aac": (COMPOSER_KIND_AUDIO, "audio/aac"),
+    ".flac": (COMPOSER_KIND_AUDIO, "audio/flac"),
+    ".ogg": (COMPOSER_KIND_AUDIO, "audio/ogg"),
+}
+
+# 分辨率预设表（M2/M3 使用，M1 仅入配置）
+COMPOSER_PRESET_DEFAULT = "720p16x9"
+COMPOSER_PRESETS: dict[str, dict[str, int]] = {
+    "720p16x9": {"width": 1280, "height": 720, "fps": 30},
+    "1080p16x9": {"width": 1920, "height": 1080, "fps": 30},
+    "720p9x16": {"width": 720, "height": 1280, "fps": 30},
+    "1080p9x16": {"width": 1080, "height": 1920, "fps": 30},
+    "720p1x1": {"width": 720, "height": 720, "fps": 30},
+}
+
 # ── MCP（mcp.py）───────────────────────────────────────────
 
 MCP_INIT_TIMEOUT = 60.0          # MCP 服务器初始化握手超时（秒）—— 首次 npx 下载可能需 20-30s
@@ -153,7 +221,6 @@ MCP_ERROR = "error"
 
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 最大上传大小（10 MB）
 MAX_TEXT_LENGTH = 80_000             # 提取文本最大长度（~20K tokens）
-MB_BYTES = 1024 * 1024              # 兆字节换算
 
 # ── CORS（main.py）─────────────────────────────────────────
 

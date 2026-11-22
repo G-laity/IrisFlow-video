@@ -12,7 +12,7 @@ from llm.chat import Chat
 from llm.client import chat as client_chat
 from llm.client import parse_tool_call_for_display
 from llm.context import build_budget, compress_messages
-from llm.constants import MSG_MAX_ITERATIONS, ROLE_ASSISTANT, ROLE_TOOL
+from llm.constants import MAX_TOOL_ITERATIONS, MSG_MAX_ITERATIONS, ROLE_ASSISTANT, ROLE_TOOL
 from llm.models import (
     AgentResponse,
     ChatMessage,
@@ -49,7 +49,7 @@ class Agent(Chat):
         tools: list[ToolDefinition] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        max_iterations: int = 10,
+        max_iterations: int = MAX_TOOL_ITERATIONS,
         top_p: float | None = None,
         top_k: int | None = None,
         presence_penalty: float | None = None,

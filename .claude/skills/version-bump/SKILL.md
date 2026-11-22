@@ -63,7 +63,7 @@ description: 当完成一组功能开发后，同步更新版本号与文档。
 
 分两次提交：
 1. **backend + docs**：`feat: vX.Y.Z — 简短描述`（含 `uv.lock`）
-2. **frontend**：`chore: frontend version → X.Y.Z`
+2. **frontend**：`chore: frontend version → X.Y.Z-简短描述`
 
 **重要**：提交信息中**禁止**添加 `Co-Authored-By:` 行。仅使用标准 Conventional Commits 格式。
 

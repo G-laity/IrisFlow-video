@@ -40,6 +40,9 @@ ENV/
 .prism_data/
 .pipeline_data/
 
+# 视频合成器运行时数据（素材 / 渲染产物，用户私有）
+backend/data/composer/
+
 # 密钥文件（绝对不能上传）
 backend/data/secrets.json
 
