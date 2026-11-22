@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-GA-brightgreen)]()
-[![Version](https://img.shields.io/badge/版本-0.38.1-green)]()
+[![Version](https://img.shields.io/badge/版本-0.38.2-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -128,9 +128,24 @@ sudo apt install ffmpeg
 
 ### 5. 本地模型 sidecar（视频合成器可选）
 
-旁白与 BGM 生成可选用本地模型（CosyVoice / Stable Audio），以独立进程运行：
-部署脚本见 [`deploy/README.md`](./deploy/README.md)。**不部署也能工作**——语音自动降级到
-edge-tts（免费、需联网），音乐可上传现成 BGM。
+旁白与 BGM 生成可选用本地模型（CosyVoice / Stable Audio），以独立进程运行。
+需要 NVIDIA GPU（两个模型均走 GPU 推理；RTX 50 系需驱动支持 **CUDA 12.8+**，显存各约 2-3 GB）：
+
+```powershell
+# 首次安装（含国内源与 Windows 兼容补丁，详见 deploy/README.md）
+pushd deploy\cosyvoice;    .\setup.ps1; popd
+pushd deploy\stable-audio; .\setup.ps1; popd
+
+# 启动服务（各开一个终端）
+cd deploy\cosyvoice;    .\serve.ps1    # 语音，端口 9701
+cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
+```
+
+启动后可用 `curl http://127.0.0.1:9701/health` 与 `curl http://127.0.0.1:9702/health` 验证；
+模型在收到首个合成请求时加载（CosyVoice 约 10s、Stable Audio 约 80s）。
+
+**不部署也能工作**——语音自动降级到 edge-tts（免费、需联网），音乐可上传现成 BGM。
+完整部署说明见 [`deploy/README.md`](./deploy/README.md)。
 
 ### 6. 初始配置
 
@@ -145,7 +160,7 @@ edge-tts（免费、需联网），音乐可上传现成 BGM。
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.38.1",...}
+# → {"name":"IrisFlow","version":"0.38.2",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
