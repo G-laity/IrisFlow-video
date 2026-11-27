@@ -24,7 +24,16 @@ import {
   STATUS_COMPLETED,
   STATUS_GENERATING,
   STATUS_PENDING,
+  UI_COMPOSER,
   UI_JUMP_BOTTOM,
+  UI_LANDING_HINT,
+  UI_LANDING_PLACEHOLDER,
+  UI_LANDING_PROMPTS,
+  UI_LANDING_SUBTITLE,
+  UI_LANDING_TITLE,
+  UI_LANDING_UPDATE,
+  UI_SESSION_LIST,
+  UI_SETTINGS,
   UI_WELCOME_SUBTITLE,
   UI_WELCOME_TITLE,
 } from "../constants";
@@ -37,6 +46,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectEntry: [entry: WorkflowEntry | null];
   preview: [payload: PreviewPayload];
+  openConversations: [];
+  openComposer: [];
+  openSettings: [];
 }>();
 
 const route = useRoute();
@@ -45,6 +57,13 @@ const refreshConversationList = inject(REFRESH_CONVERSATION_LIST_KEY, () => {});
 const onConnectionLost = inject(ON_CONNECTION_LOST_KEY, () => {});
 
 const sessionId = computed(() => (route.params.sessionId as string) ?? null);
+const isLanding = computed(() => !sessionId.value);
+const landingPrompts = UI_LANDING_PROMPTS;
+const landingInputRef = ref<{ setText: (text: string) => void } | null>(null);
+
+function useLandingPrompt(prompt: string) {
+  landingInputRef.value?.setText(prompt);
+}
 
 const enabledBuiltins = ref<string[]>([...DEFAULT_ENABLED_TOOLS]);
 
@@ -307,8 +326,76 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="scrollEl" class="chat-panel" @scroll="onScroll">
-    <div class="chat-center">
+  <div
+    ref="scrollEl"
+    class="chat-panel"
+    :class="{ 'chat-panel--landing': isLanding }"
+    @scroll="onScroll"
+  >
+    <div v-if="isLanding" class="landing">
+      <header class="landing-top">
+        <div class="landing-brand">
+          <span class="landing-logo"><i class="fa-solid fa-bolt"></i></span>
+          <span class="landing-wordmark">IrisFlow</span>
+        </div>
+        <nav class="landing-nav" aria-label="快捷入口">
+          <button type="button" @click="emit('openConversations')">
+            <i class="fa-solid fa-clock-rotate-left"></i><span>{{ UI_SESSION_LIST }}</span>
+          </button>
+          <button type="button" @click="emit('openComposer')">
+            <i class="fa-solid fa-clapperboard"></i><span>{{ UI_COMPOSER }}</span>
+          </button>
+          <button type="button" @click="emit('openSettings')">
+            <i class="fa-solid fa-gear"></i><span>{{ UI_SETTINGS }}</span>
+          </button>
+        </nav>
+      </header>
+
+      <main class="landing-main">
+        <div class="landing-note">
+          <i class="fa-solid fa-diamond"></i>
+          <span>{{ UI_LANDING_UPDATE }}</span>
+          <i class="fa-solid fa-arrow-right landing-note-arrow"></i>
+        </div>
+        <h1>{{ UI_LANDING_TITLE }}</h1>
+        <p class="landing-sub">{{ UI_LANDING_SUBTITLE }}</p>
+
+        <div class="landing-composer">
+          <ChatInput
+            ref="landingInputRef"
+            hero
+            :placeholder="UI_LANDING_PLACEHOLDER"
+            :loading="isLoading"
+            :disabled="pendingCalls.length > 0"
+            :enabled-builtins="enabledBuiltins"
+            :tool-groups="toolGroups"
+            :session-settings="agent.currentSettings.value"
+            :default-settings="agent.defaultSettings.value"
+            @send="handleSend"
+            @stop="agent.abort()"
+            @update:session-settings="agent.currentSettings.value = $event"
+            @toggle-tool="handleToggleTool"
+            @toggle-group="handleToggleGroup"
+            @manage-group="handleManageGroup"
+            @preview="(p) => emit('preview', p)"
+          />
+        </div>
+
+        <div class="landing-prompts">
+          <button
+            v-for="prompt in landingPrompts"
+            :key="prompt"
+            type="button"
+            @click="useLandingPrompt(prompt)"
+          >
+            {{ prompt }}
+          </button>
+        </div>
+        <div class="landing-hint">{{ UI_LANDING_HINT }}</div>
+      </main>
+    </div>
+
+    <div v-else class="chat-center">
       <div class="chat-scroll">
         <div v-if="!agent.messages.value.length && !isLoading" class="welcome">
           <i class="welcome-icon fa-solid fa-bolt"></i>
@@ -384,6 +471,185 @@ defineExpose({
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* ── 开始页 ─────────────────────────────────────── */
+
+.chat-panel--landing {
+  display: block;
+  overflow-y: auto;
+}
+
+.landing {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0 32px;
+}
+
+.landing-top {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px 4px 10px;
+}
+
+.landing-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.landing-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-strong);
+  color: var(--accent);
+  font-size: 15px;
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+}
+
+.landing-wordmark {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.landing-nav button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 35%, transparent);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.landing-nav button:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-dim);
+  background: var(--bg-hover);
+}
+
+.landing-nav i { font-size: 12px; }
+
+.landing-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 0 6vh;
+}
+
+.landing-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 38%, transparent);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.landing-note i:first-child {
+  color: var(--accent);
+  font-size: 9px;
+}
+
+.landing-note-arrow {
+  font-size: 9px;
+  opacity: 0.55;
+}
+
+.landing-main h1 {
+  margin: 26px 0 12px;
+  font-size: clamp(38px, 6vw, 66px);
+  line-height: 1.06;
+  letter-spacing: 0.08em;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+
+.landing-sub {
+  margin: 0 0 30px;
+  max-width: 540px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.landing-composer {
+  width: min(780px, 100%);
+  text-align: left;
+}
+
+.landing-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.landing-prompts button {
+  padding: 9px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-secondary) 30%, transparent);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.landing-prompts button:hover {
+  color: var(--text-secondary);
+  border-color: var(--text-dim);
+  background: var(--bg-hover);
+}
+
+.landing-hint {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+@media (max-width: 760px) {
+  .landing { padding: 0 18px; }
+  .landing-top { padding: 18px 0 8px; }
+  .landing-nav button { padding: 9px; }
+  .landing-nav button span { display: none; }
+  .landing-main h1 { letter-spacing: 0.05em; }
+  .landing-sub { font-size: 13px; }
+  .landing-note { font-size: 10px; }
 }
 
 .chat-center {

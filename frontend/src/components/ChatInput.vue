@@ -27,6 +27,9 @@ const props = defineProps<{
   toolGroups: Record<string, string[]>;
   sessionSettings: SessionSettings;
   defaultSettings: SessionSettings;
+  /** 开始页大输入卡 */
+  hero?: boolean;
+  placeholder?: string;
 }>();
 
 const route = useRoute();
@@ -156,6 +159,19 @@ watch(() => props.defaultSettings, (d) => {
   }
 });
 
+function setText(text: string) {
+  input.value = text;
+  nextTick(() => {
+    const el = textareaRef.value;
+    if (!el) return;
+    el.focus();
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, window.innerHeight * 0.4)}px`;
+  });
+}
+
+defineExpose({ setText });
+
 const hasFiles = computed(() => uploadFiles.value.length > 0);
 
 /** 按类型分组，图片与文件分行展示 */
@@ -247,7 +263,13 @@ function handleSend() {
 </script>
 
 <template>
-  <div class="input-card glass-card">
+  <div class="input-card glass-card" :class="{ 'input-card--hero': hero }">
+    <!-- REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移；内容不在其中 -->
+    <span class="glass-card__warp" aria-hidden="true"></span>
+
+    <!-- TINT：滤镜之上的半透明染色，保证文字对比 -->
+    <span class="glass-card__tint" aria-hidden="true"></span>
+
     <!-- INNER/OUTER rim + 边缘色散：在玻璃之上、内容之下 -->
     <span class="glass-card__rim" aria-hidden="true"></span>
     <!-- 上传错误提示 -->
@@ -293,7 +315,7 @@ function handleSend() {
         ref="textareaRef"
         v-model="input"
         class="input-area"
-        :placeholder="UI_INPUT_PLACEHOLDER"
+        :placeholder="placeholder || UI_INPUT_PLACEHOLDER"
         rows="3"
         :disabled="disabled"
         @focus="inputFocused = true"
@@ -380,7 +402,7 @@ function handleSend() {
           :disabled="!input.trim() && !hasFiles"
           @click="handleSend"
         >
-          <i class="fa-solid fa-play"></i>
+          <i :class="hero ? 'fa-solid fa-arrow-up' : 'fa-solid fa-play'"></i>
         </button>
       </div>
     </div>
@@ -401,10 +423,41 @@ function handleSend() {
   isolation: isolate;
 }
 
+/* 开始页的大输入卡 */
+.input-card--hero {
+  border-radius: 24px;
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner),
+    inset 0 -1px 0 var(--glass-tint);
+}
+
+.input-card--hero .input-area {
+  min-height: 96px;
+  padding: 18px 18px 8px;
+  font-size: 17px;
+}
+
+.input-card--hero .input-row {
+  padding: 8px 12px 12px;
+}
+
+.input-card--hero .input-tools {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.input-card--hero .btn-send {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
 /* 内容在玻璃高光与 rim 之上 */
-.input-card > *:not(.glass-card__rim) {
+.input-card > *:not(.glass-card__rim):not(.glass-card__warp):not(.glass-card__tint) {
   position: relative;
-  z-index: 2;
+  z-index: 4;
 }
 
 /* 聚焦时 textarea 底边强调线：从中心向两侧缓缓展开 */

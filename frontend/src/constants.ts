@@ -212,6 +212,18 @@ export const UI_THOUGHT_LABEL = "已思考";
 export const UI_WELCOME_TITLE = "IrisFlow";
 export const UI_WELCOME_SUBTITLE = "输入消息，开始对话";
 export const UI_INPUT_PLACEHOLDER = "输入消息，开始对话";
+
+// ── 开始页 ───────────────────────────────────────
+export const UI_LANDING_TITLE = "让想法开始流动";
+export const UI_LANDING_SUBTITLE = "LLM Chat + Agent · 模型、工具与视频合成器，从一个问题开始。";
+export const UI_LANDING_PLACEHOLDER = "问点什么，一起探索";
+export const UI_LANDING_HINT = "Enter 发送 · Shift + Enter 换行";
+export const UI_LANDING_UPDATE = "IrisFlow v0.41 · 卡片玻璃与透镜折射已上线";
+export const UI_LANDING_PROMPTS = [
+  "帮我总结这段文字",
+  "让 Agent 调用工具查资料",
+  "写一个视频分镜脚本",
+];
 export const UI_NEW_CHAT = "新建对话";
 export const UI_NO_CONVERSATIONS = "暂无会话";
 export const UI_LOADING = "加载中…";

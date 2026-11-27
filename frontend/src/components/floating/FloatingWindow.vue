@@ -517,6 +517,12 @@ function clampToViewport() {
       }"
       :style="{ width, zIndex }"
     >
+      <!-- REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移；内容不在其中 -->
+      <span class="glass-card__warp" aria-hidden="true"></span>
+
+      <!-- TINT：滤镜之上的半透明染色，保证文字对比 -->
+      <span class="glass-card__tint" aria-hidden="true"></span>
+
       <!-- INNER/OUTER rim + 边缘色散：在玻璃之上、内容之下 -->
       <span class="glass-card__rim" aria-hidden="true"></span>
 
@@ -611,7 +617,7 @@ function clampToViewport() {
 .fw-content > .fw-body,
 .fw-content > .fw-footer {
   position: relative;
-  z-index: 2;
+  z-index: 4;
 }
 
 /* ── 流体变形：尺寸 / 圆角由 WAAPI 逐帧驱动 ────────── */
@@ -623,9 +629,13 @@ function clampToViewport() {
   pointer-events: none;
 }
 
-/* 变形中外壳圆角持续变化，rim 隐藏，等落定后再出现 */
+/* 变形中外壳圆角/尺寸持续变化：rim 与透镜滤镜先隐藏，避免小尺寸被强位移 */
 .fw-panel--morphing .glass-card__rim {
   opacity: 0;
+}
+
+.fw-panel--morphing .glass-card__warp {
+  filter: none;
 }
 
 /* ═══════════════════════════════════════════════════

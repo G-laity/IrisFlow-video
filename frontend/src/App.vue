@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, provide } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, provide } from "vue";
+import { useRoute } from "vue-router";
 import ConversationList from "./components/floating/ConversationList.vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import WorkflowDetail from "./components/floating/WorkflowDetail.vue";
 import MediaPreview from "./components/floating/MediaPreview.vue";
 import SettingsPanel from "./components/floating/SettingsPanel.vue";
 import ComposerPanel from "./components/floating/ComposerPanel.vue";
+import GlassFilters from "./components/GlassFilters.vue";
 import { getLLMConfig, ping, getServerUrl, setServerUrl } from "./api/client";
 import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_COMPOSER, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_CONVERSATION_LIST_KEY, REMOVE_SESSION_CACHE_KEY } from "./composables/injectionKeys";
 import { discoverTools } from "./composables/toolMetadata";
-import { useGlassPointer } from "./composables/useGlassPointer";
 import { preloadMarkdown } from "./utils/markdown";
 import { composerToast, clearComposerToast } from "./composables/useComposer";
 import type { WorkflowEntry, PreviewPayload } from "./types/api";
@@ -19,6 +20,9 @@ import type { MorphRect } from "./utils/fluidMorph";
 function onServerUrlInput(e: Event) {
   setServerUrl((e.target as HTMLInputElement).value);
 }
+
+const route = useRoute();
+const isLanding = computed(() => route.name === "new-chat");
 
 const model = ref("");
 const showSettings = ref(false);
@@ -58,12 +62,21 @@ function openComposer() {
 
 // ── 持久浮窗（v-model 驱动，纯内存）───────────
 
-const showConversationList = ref(true);  // 默认显示
+const showConversationList = ref(route.name !== "new-chat");
 
 function openConversations() {
   conversationOrigin.value = captureRect(conversationBtnEl.value);
   showConversationList.value = true;
 }
+
+// 开始页保持干净；进入对话时恢复会话列表
+watch(
+  () => route.name,
+  (name, prev) => {
+    if (name === "new-chat") showConversationList.value = false;
+    else if (name === "chat" && prev === "new-chat") showConversationList.value = true;
+  },
+);
 
 // ── 动态窗管理体系 ────────────────────────────
 // 点击即创建，关闭即销毁。同类可并行多开。
@@ -155,9 +168,6 @@ provide(ON_CONNECTION_LOST_KEY, onConnectionLost);
 
 getLLMConfig().then(cfg => { model.value = cfg.default_model || ""; }).catch(() => { model.value = ""; });
 
-// A2：指针驱动的玻璃折射（触摸 / 减弱动效自动跳过）
-useGlassPointer();
-
 onMounted(() => {
   startHeartbeat();
   // 后台定期刷新 MCP 工具列表（覆盖健康检查自动重连等非手动触发场景）
@@ -180,6 +190,12 @@ function handleUpdateSettings(cfg: { model: string }) {
 </script>
 
 <template>
+  <!-- 全局玻璃滤镜定义：透镜位移图 + 边缘 mask + RGB 色散 -->
+  <GlassFilters />
+
+  <!-- 环境光：给玻璃边缘提供可折射的结构（静态，不抢文字） -->
+  <div class="app-ambient" aria-hidden="true"></div>
+
   <div class="app-layout">
     <main class="main-area">
       <ChatPanel
@@ -187,6 +203,9 @@ function handleUpdateSettings(cfg: { model: string }) {
         :model="model"
         @select-entry="onSelectEntry"
         @preview="onPreview"
+        @open-conversations="openConversations"
+        @open-composer="openComposer"
+        @open-settings="openSettings"
       />
     </main>
 
@@ -229,6 +248,7 @@ function handleUpdateSettings(cfg: { model: string }) {
 
   <!-- 会话列表按钮（左上角，胶囊 → 流体展开为面板） -->
   <button
+    v-if="!isLanding"
     ref="conversationBtnEl"
     class="floating-toggle floating-toggle--tl floating-toggle--capsule"
     :class="{ 'is-morphed': showConversationList }"
@@ -244,6 +264,7 @@ function handleUpdateSettings(cfg: { model: string }) {
 
   <!-- 合成器按钮（右上角，设置按钮下方，胶囊 → 流体展开为面板） -->
   <button
+    v-if="!isLanding"
     ref="composerBtnEl"
     class="floating-toggle floating-toggle--tr2 floating-toggle--capsule"
     :class="{ 'is-morphed': showComposer || showSettings }"
@@ -259,6 +280,7 @@ function handleUpdateSettings(cfg: { model: string }) {
 
   <!-- 设置按钮（右上角，胶囊 → 流体展开为面板） -->
   <button
+    v-if="!isLanding"
     ref="settingsBtnEl"
     class="floating-toggle floating-toggle--tr floating-toggle--capsule"
     :class="{ 'is-morphed': showSettings }"
@@ -308,7 +330,61 @@ function handleUpdateSettings(cfg: { model: string }) {
    布局
    ═══════════════════════════════════════════════════ */
 
+.app-ambient {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background:
+    radial-gradient(58% 54% at 73% 16%, rgba(84, 126, 255, 0.20), transparent 66%),
+    radial-gradient(52% 46% at 22% 80%, rgba(255, 84, 168, 0.14), transparent 66%),
+    radial-gradient(40% 38% at 86% 82%, rgba(52, 210, 190, 0.10), transparent 64%),
+    var(--bg-primary);
+}
+
+.app-ambient::before {
+  content: "";
+  position: absolute;
+  inset: -18% -12%;
+  background: linear-gradient(112deg, transparent 37%, rgba(128, 178, 255, 0.14) 48%, transparent 58%);
+  filter: blur(32px);
+  transform: rotate(-9deg);
+}
+
+.app-ambient::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(110% 100% at 50% 46%, #000 36%, transparent 96%);
+  -webkit-mask-image: radial-gradient(110% 100% at 50% 46%, #000 36%, transparent 96%);
+}
+
+:root[data-theme="light"] .app-ambient {
+  background:
+    radial-gradient(58% 54% at 73% 16%, rgba(75, 91, 214, 0.12), transparent 66%),
+    radial-gradient(52% 46% at 22% 80%, rgba(214, 75, 150, 0.09), transparent 66%),
+    radial-gradient(40% 38% at 86% 82%, rgba(20, 160, 140, 0.08), transparent 64%),
+    var(--bg-primary);
+}
+
+:root[data-theme="light"] .app-ambient::before {
+  background: linear-gradient(112deg, transparent 37%, rgba(120, 150, 255, 0.16) 48%, transparent 58%);
+}
+
+:root[data-theme="light"] .app-ambient::after {
+  background-image:
+    linear-gradient(rgba(24, 35, 70, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(24, 35, 70, 0.055) 1px, transparent 1px);
+}
+
 .app-layout {
+  position: relative;
+  z-index: 1;
   display: flex;
   height: 100%;
   overflow-x: hidden;
