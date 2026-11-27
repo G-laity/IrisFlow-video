@@ -204,6 +204,10 @@ async function handleCopy() {
   background: var(--accent);
   color: var(--white);
   border-radius: var(--radius-lg) var(--radius-lg) 4px var(--radius-lg);
+  /* Tint 玻璃：用户气泡本身是彩色卡片，只补 rim + 内缘高光，保持正文清晰 */
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner);
 }
 
 .bubble.assistant {
@@ -243,6 +247,10 @@ async function handleCopy() {
   border: 1px solid var(--white-20);
   border-radius: 10px;
   cursor: pointer;
+  /* Tint 玻璃：消息内的小卡片 */
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner);
 }
 .msg-file-card:hover { background: var(--white-18); }
 

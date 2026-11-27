@@ -20,12 +20,14 @@ import {
   UI_REPEAT_PENALTY,
 } from "../constants";
 import type { SessionSettings } from "../types/api";
+import type { MorphRect } from "../utils/fluidMorph";
 import FloatingWindow from "./floating/FloatingWindow.vue";
 
 const props = defineProps<{
   modelValue: boolean;
   settings: SessionSettings;
   defaults: SessionSettings;
+  morphOrigin?: MorphRect | null;
 }>();
 
 const emit = defineEmits<{
@@ -190,6 +192,7 @@ const clearableFields = [
     icon="fa-solid fa-sliders"
     position="bottom-right"
     width="560px"
+    :morph-from="morphOrigin"
     @update:model-value="$emit('update:modelValue', $event)"
     @close="handleClose"
   >

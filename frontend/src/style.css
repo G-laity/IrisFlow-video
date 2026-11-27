@@ -48,7 +48,13 @@
   --glass-border: rgba(255, 255, 255, 0.14);
   --glass-sheen: rgba(255, 255, 255, 0.10);
   --glass-sheen-strong: rgba(255, 255, 255, 0.20);
+  --glass-sheen-warm: rgba(255, 240, 214, 0.12);
   --glass-bg: color-mix(in srgb, var(--bg-secondary) 48%, transparent);
+  --glass-rim-inner: rgba(190, 205, 255, 0.16);
+  --glass-tint: rgba(255, 255, 255, 0.055);
+  --glass-dispersion-r: rgba(255, 110, 110, 0.10);
+  --glass-dispersion-g: rgba(110, 255, 180, 0.055);
+  --glass-dispersion-b: rgba(110, 160, 255, 0.10);
   --status-generating: #f0c040;
   --status-pending: #e45a3c;
   --status-unknown: #6c7a8d;
@@ -99,7 +105,13 @@
   --glass-border: rgba(24, 35, 70, 0.18);
   --glass-sheen: rgba(255, 255, 255, 0.35);
   --glass-sheen-strong: rgba(255, 255, 255, 0.65);
+  --glass-sheen-warm: rgba(255, 250, 240, 0.55);
   --glass-bg: color-mix(in srgb, var(--bg-secondary) 68%, transparent);
+  --glass-rim-inner: rgba(24, 35, 70, 0.10);
+  --glass-tint: rgba(24, 35, 70, 0.05);
+  --glass-dispersion-r: rgba(220, 80, 80, 0.05);
+  --glass-dispersion-g: rgba(40, 190, 120, 0.025);
+  --glass-dispersion-b: rgba(70, 110, 235, 0.06);
   --status-generating: #a16207;
   --status-pending: #c2410c;
   --status-unknown: #7c839a;
@@ -179,6 +191,128 @@ select:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   IrisFlow Card Glass
+   三层：Background（页面本身）→ Glass → Content
+   合成顺序：REFRACT → SHADOW → TINT → LIGHT
+   ═══════════════════════════════════════════════════ */
+
+.glass-card {
+  position: relative;
+  /* 1. REFRACT：背景采样 + 静态 SVG 折射（渐进增强） */
+  background: var(--bg-secondary);
+  background: var(--glass-bg);
+  backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  backdrop-filter: blur(18px) saturate(1.75) brightness(1.04) url(#liquid-glass-refraction);
+  -webkit-backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  /* 2. SHADOW + 3. TINT：外阴影 + 外缘高光 + 内缘环 + 底部厚度染 */
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner),
+    inset 0 -1px 0 var(--glass-tint);
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* 4. LIGHT：四点掠射环境光（冷/暖错开，只压在外半圈） */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(90% 62% at 8% -8%, var(--glass-sheen-strong), transparent 46%),
+    radial-gradient(82% 58% at 92% 108%, var(--glass-sheen-strong), transparent 48%),
+    radial-gradient(70% 52% at 92% -6%, var(--glass-sheen-warm), transparent 44%),
+    radial-gradient(70% 52% at 6% 108%, var(--glass-sheen-warm), transparent 46%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  animation: liquid-glass-flow 18s ease-in-out infinite alternate;
+}
+
+/* 镜面扫光 */
+.glass-card::after {
+  content: "";
+  position: absolute;
+  top: -60%;
+  bottom: -60%;
+  left: -40%;
+  right: -40%;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 40%,
+    var(--glass-sheen) 48%,
+    transparent 56%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  animation: liquid-glass-sheen 12s ease-in-out infinite;
+}
+
+/* INNER / OUTER rim + 1px 边缘色散（仅 Blur 玻璃） */
+.glass-card__rim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 1px 0 0 var(--glass-dispersion-r),
+    inset -1px 0 0 var(--glass-dispersion-b),
+    inset 0 1px 0 var(--glass-dispersion-g),
+    inset 0 -1px 0 var(--glass-dispersion-g);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+
+:root[data-theme="light"] .glass-card__rim {
+  mix-blend-mode: normal;
+}
+
+/* CONTENT：永远在玻璃与 rim 之上，不参与滤镜 */
+.glass-card__body {
+  position: relative;
+  z-index: 2;
+}
+
+/* Tint 玻璃：只叠色不叠模糊（消息卡 / 条目 / 小组件） */
+.glass-card--tint {
+  position: relative;
+  background: var(--bg-secondary);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner),
+    inset 0 -1px 0 var(--glass-tint);
+}
+
+@keyframes liquid-glass-flow {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.05); }
+}
+
+@keyframes liquid-glass-sheen {
+  0%   { transform: translateX(-45%) rotate(0.001deg); opacity: 0; }
+  8%   { opacity: 0.55; }
+  55%  { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+  100% { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+}
+
+/* 不支持 backdrop-filter 的浏览器回退为实色，避免半透明看不清 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-card {
+    background: var(--bg-secondary);
   }
 }
 

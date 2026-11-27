@@ -54,6 +54,7 @@ import {
 } from "../../constants";
 import { ON_CONNECTION_LOST_KEY, REMOVE_SESSION_CACHE_KEY } from "../../composables/injectionKeys";
 import type { ConversationInfo, SessionStatus } from "../../types/api";
+import type { MorphRect } from "../../utils/fluidMorph";
 
 const route = useRoute();
 const router = useRouter();
@@ -61,6 +62,7 @@ const currentSessionId = computed(() => (route.params.sessionId as string) ?? nu
 
 defineProps<{
   modelValue: boolean;
+  morphOrigin?: MorphRect | null;
 }>();
 
 const removeSessionCache = inject(REMOVE_SESSION_CACHE_KEY, () => {});
@@ -534,6 +536,7 @@ watch(
     position="top-left"
     :title="UI_SESSION_LIST"
     icon="fa-solid fa-bars"
+    :morph-from="morphOrigin"
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('close')"
@@ -703,10 +706,12 @@ watch(
   z-index: 0;
   pointer-events: none;
   border-radius: var(--radius);
-  background: var(--accent-bg);
+  /* Tint 玻璃：活动会话条目 = 彩色玻璃卡片 */
+  background: color-mix(in srgb, var(--accent-bg) 72%, var(--glass-bg));
   border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
   box-shadow:
-    inset 0 0 0 1px var(--glass-highlight),
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner),
     0 0 14px var(--accent-shadow);
   transition:
     top 0.34s cubic-bezier(0.22, 1.12, 0.36, 1),

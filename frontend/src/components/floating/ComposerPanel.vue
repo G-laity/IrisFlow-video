@@ -22,9 +22,11 @@ import {
   stopComposerEvents,
 } from "../../composables/useComposer";
 import type { PreviewPayload } from "../../types/api";
+import type { MorphRect } from "../../utils/fluidMorph";
 
 defineProps<{
   modelValue: boolean;
+  morphOrigin?: MorphRect | null;
 }>();
 
 const emit = defineEmits<{
@@ -69,6 +71,7 @@ onUnmounted(() => {
     width="640px"
     :title="UI_COMPOSER"
     icon="fa-solid fa-clapperboard"
+    :morph-from="morphOrigin"
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('close')"

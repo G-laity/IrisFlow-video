@@ -10,9 +10,11 @@ import { getLLMConfig, ping, getServerUrl, setServerUrl } from "./api/client";
 import { HEARTBEAT_INTERVAL, TOOL_REFRESH_INTERVAL, WF_THINK, WF_TOOL_CALL, WF_TOOL_RESULT, UI_COMPOSER, UI_CONNECTION_LOST, UI_AUTO_RECOVER, UI_MODIFY_SERVER_URL, UI_SESSION_LIST, UI_SETTINGS } from "./constants";
 import { ON_CONNECTION_LOST_KEY, REFRESH_CONVERSATION_LIST_KEY, REMOVE_SESSION_CACHE_KEY } from "./composables/injectionKeys";
 import { discoverTools } from "./composables/toolMetadata";
+import { useGlassPointer } from "./composables/useGlassPointer";
 import { preloadMarkdown } from "./utils/markdown";
 import { composerToast, clearComposerToast } from "./composables/useComposer";
 import type { WorkflowEntry, PreviewPayload } from "./types/api";
+import type { MorphRect } from "./utils/fluidMorph";
 
 function onServerUrlInput(e: Event) {
   setServerUrl((e.target as HTMLInputElement).value);
@@ -24,9 +26,44 @@ const showComposer = ref(false);
 const chatPanelRef = ref<InstanceType<typeof ChatPanel> | null>(null);
 const conversationListRef = ref<InstanceType<typeof ConversationList> | null>(null);
 
+// ── 浮岛按钮 → 面板流体变形 ──────────────────────
+
+const settingsBtnEl = ref<HTMLButtonElement | null>(null);
+const settingsOrigin = ref<MorphRect | null>(null);
+const composerBtnEl = ref<HTMLButtonElement | null>(null);
+const composerOrigin = ref<MorphRect | null>(null);
+const conversationBtnEl = ref<HTMLButtonElement | null>(null);
+const conversationOrigin = ref<MorphRect | null>(null);
+
+function captureRect(el: HTMLElement | null): MorphRect | null {
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
+function openSettings() {
+  settingsOrigin.value = captureRect(settingsBtnEl.value);
+  showSettings.value = true;
+}
+
+function openComposer() {
+  composerOrigin.value = captureRect(composerBtnEl.value);
+  showComposer.value = true;
+}
+
 // ── 持久浮窗（v-model 驱动，纯内存）───────────
 
 const showConversationList = ref(true);  // 默认显示
+
+function openConversations() {
+  conversationOrigin.value = captureRect(conversationBtnEl.value);
+  showConversationList.value = true;
+}
 
 // ── 动态窗管理体系 ────────────────────────────
 // 点击即创建，关闭即销毁。同类可并行多开。
@@ -118,12 +155,17 @@ provide(ON_CONNECTION_LOST_KEY, onConnectionLost);
 
 getLLMConfig().then(cfg => { model.value = cfg.default_model || ""; }).catch(() => { model.value = ""; });
 
+// A2：指针驱动的玻璃折射（触摸 / 减弱动效自动跳过）
+useGlassPointer();
+
 onMounted(() => {
   startHeartbeat();
   // 后台定期刷新 MCP 工具列表（覆盖健康检查自动重连等非手动触发场景）
   _toolTimer = setInterval(discoverTools, TOOL_REFRESH_INTERVAL);
   // 空闲预加载 Markdown 重依赖（首屏不阻塞）
   setTimeout(preloadMarkdown, 1200);
+  // 会话列表默认展开；先记下隐藏按钮的矩形，首次关闭也能收成胶囊
+  conversationOrigin.value = captureRect(conversationBtnEl.value);
 });
 
 onUnmounted(() => {
@@ -135,13 +177,6 @@ function handleUpdateSettings(cfg: { model: string }) {
   model.value = cfg.model;
 }
 
-// ── 单例窗口显现（不可重复创建）───────────────
-
-function showWindow(type: 'conversations' | 'settings' | 'composer') {
-  if (type === 'conversations') showConversationList.value = true;
-  else if (type === 'settings') showSettings.value = true;
-  else showComposer.value = true;
-}
 </script>
 
 <template>
@@ -157,6 +192,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
 
     <SettingsPanel
       v-model="showSettings"
+      :morph-origin="settingsOrigin"
       @update="handleUpdateSettings"
     />
   </div>
@@ -164,6 +200,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
   <!-- 合成器浮窗（素材库 M1；项目/时间轴/渲染随 M2/M3 开放） -->
   <ComposerPanel
     v-model="showComposer"
+    :morph-origin="composerOrigin"
     @preview="onPreview"
   />
 
@@ -171,6 +208,7 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
   <ConversationList
     ref="conversationListRef"
     v-model="showConversationList"
+    :morph-origin="conversationOrigin"
   />
 
   <!-- 动态窗（点击即创建，可并行多开） -->
@@ -189,32 +227,47 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
     />
   </template>
 
-  <!-- 浮岛切换按钮（左上角） -->
+  <!-- 会话列表按钮（左上角，胶囊 → 流体展开为面板） -->
   <button
-    class="floating-toggle floating-toggle--tl"
-    @click="showWindow('conversations')"
+    ref="conversationBtnEl"
+    class="floating-toggle floating-toggle--tl floating-toggle--capsule"
+    :class="{ 'is-morphed': showConversationList }"
+    @click="openConversations"
     :title="UI_SESSION_LIST"
     :aria-label="UI_SESSION_LIST"
+    :aria-expanded="showConversationList"
+    :tabindex="showConversationList ? -1 : undefined"
+    aria-haspopup="dialog"
   >
     <i class="fa-solid fa-bars"></i>
   </button>
 
-  <!-- 合成器按钮（右上角，设置按钮下方） -->
+  <!-- 合成器按钮（右上角，设置按钮下方，胶囊 → 流体展开为面板） -->
   <button
-    class="floating-toggle floating-toggle--tr2"
-    @click="showWindow('composer')"
+    ref="composerBtnEl"
+    class="floating-toggle floating-toggle--tr2 floating-toggle--capsule"
+    :class="{ 'is-morphed': showComposer || showSettings }"
+    @click="openComposer"
     :title="UI_COMPOSER"
     :aria-label="UI_COMPOSER"
+    :aria-expanded="showComposer"
+    :tabindex="showComposer ? -1 : undefined"
+    aria-haspopup="dialog"
   >
     <i class="fa-solid fa-clapperboard"></i>
   </button>
 
-  <!-- 设置按钮（右上角） -->
+  <!-- 设置按钮（右上角，胶囊 → 流体展开为面板） -->
   <button
-    class="floating-toggle floating-toggle--tr"
-    @click="showWindow('settings')"
+    ref="settingsBtnEl"
+    class="floating-toggle floating-toggle--tr floating-toggle--capsule"
+    :class="{ 'is-morphed': showSettings }"
+    @click="openSettings"
     :title="UI_SETTINGS"
     :aria-label="UI_SETTINGS"
+    :aria-expanded="showSettings"
+    :tabindex="showSettings ? -1 : undefined"
+    aria-haspopup="dialog"
   >
     <i class="fa-solid fa-gear"></i>
   </button>
@@ -304,6 +357,65 @@ function showWindow(type: 'conversations' | 'settings' | 'composer') {
   &.floating-toggle--bl { bottom: 12px; left: 12px; }
   &.floating-toggle--tr { top: 12px; right: 12px; }
   &.floating-toggle--tr2 { top: 50px; right: 12px; }
+}
+
+/* ── 统一胶囊按钮：浮窗的“折叠态” ─────────────── */
+
+.floating-toggle--capsule {
+  width: 56px;
+  height: 32px;
+  min-width: 56px;
+  padding: 0;
+  gap: 0;
+  border-radius: 999px;
+  /* Tint 玻璃：只叠色不叠模糊 */
+  background: var(--bg-secondary);
+  background: var(--glass-bg);
+  border-color: var(--glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    inset 0 0 0 1px var(--glass-rim-inner),
+    inset 0 -1px 0 var(--glass-tint);
+  /* 收起时延迟现身：面板缩回按钮位置的过程中再淡入，避免透过玻璃看见重影 */
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.2s,
+    opacity 0.1s ease 0.16s,
+    transform 0.18s ease 0.16s;
+}
+
+.floating-toggle--capsule i {
+  font-size: 13px;
+}
+
+.floating-toggle--capsule:hover {
+  background: var(--glass-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 0 14px var(--accent-strong);
+}
+
+/* 打开时让位给从同一矩形长出的面板；关闭时面板最后正好盖住按钮 */
+.floating-toggle--capsule.is-morphed {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.94);
+  /* 展开时立即让位，不等收起延迟 */
+  transition:
+    color 0.15s,
+    background 0.15s,
+    border-color 0.15s,
+    box-shadow 0.2s,
+    opacity 0.12s ease,
+    transform 0.18s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-toggle--capsule { transition-delay: 0s !important; }
 }
 
 /* ═══════════════════════════════════════════════════

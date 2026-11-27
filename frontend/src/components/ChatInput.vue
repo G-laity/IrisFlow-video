@@ -16,6 +16,7 @@ import { draftStore } from "../composables/drafts";
 import { fileIcon, filePreview } from "../utils";
 import { ON_CONNECTION_LOST_KEY } from "../composables/injectionKeys";
 import type { FileAttachment, PreviewPayload, SessionSettings } from "../types/api";
+import type { MorphRect } from "../utils/fluidMorph";
 import ImageViewer from "./ImageViewer.vue";
 import SessionSettingsPanel from "./SessionSettingsPanel.vue";
 
@@ -49,6 +50,22 @@ const uploadFiles = ref<FileAttachment[]>([]);
 const uploading = ref(false);
 const thinking = ref(true);
 const settingsVisible = ref(false);
+const sessionSettingsBtnEl = ref<HTMLButtonElement | null>(null);
+const sessionSettingsOrigin = ref<MorphRect | null>(null);
+
+function openSessionSettings() {
+  const el = sessionSettingsBtnEl.value;
+  if (el) {
+    const r = el.getBoundingClientRect();
+    sessionSettingsOrigin.value = {
+      left: r.left,
+      top: r.top,
+      width: r.width,
+      height: r.height,
+    };
+  }
+  settingsVisible.value = true;
+}
 // ── 工具组 ─────────────────────────────────────────
 
 /** 工具组条目列表（"内置"优先，其余按名称排序） */
@@ -230,7 +247,9 @@ function handleSend() {
 </script>
 
 <template>
-  <div class="input-card">
+  <div class="input-card glass-card">
+    <!-- INNER/OUTER rim + 边缘色散：在玻璃之上、内容之下 -->
+    <span class="glass-card__rim" aria-hidden="true"></span>
     <!-- 上传错误提示 -->
     <div v-if="uploadError" class="upload-error">
       <span>{{ uploadError }}</span>
@@ -265,6 +284,7 @@ function handleSend() {
       v-model="settingsVisible"
       :settings="sessionSettings"
       :defaults="defaultSettings"
+      :morph-origin="sessionSettingsOrigin"
       @update:settings="$emit('update:sessionSettings', $event)"
     />
     <!-- 文字输入 -->
@@ -322,7 +342,13 @@ function handleSend() {
           <i v-if="uploading" class="fa-solid fa-spinner fa-spin"></i>
           <i v-else class="fa-solid fa-paperclip"></i>
         </button>
-        <button class="circle-btn-lg attach-btn settings-btn" :class="{ on: settingsVisible }" @click="settingsVisible = true" :title="UI_SESSION_SETTINGS">
+        <button
+          ref="sessionSettingsBtnEl"
+          class="circle-btn-lg attach-btn settings-btn"
+          :class="{ on: settingsVisible }"
+          @click="openSessionSettings"
+          :title="UI_SESSION_SETTINGS"
+        >
           <i class="fa-solid fa-sliders"></i>
         </button>
         <input
@@ -364,74 +390,21 @@ function handleSend() {
 <style scoped>
 .input-card {
   position: relative;
-  /* 液态玻璃：磨砂 + 背景折射（渐进增强）+ 流动高光 */
-  background: var(--bg-secondary);
-  background: var(--glass-bg);
-  backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
-  backdrop-filter: blur(18px) saturate(1.75) brightness(1.04) url(#liquid-glass-refraction);
-  -webkit-backdrop-filter: blur(22px) saturate(1.75) brightness(1.04);
-  border: 1px solid var(--glass-border);
   border-radius: 20px;
-  overflow: hidden;
-  isolation: isolate;
+  /* 输入栏比浮窗轻一档，避免底部玻璃压住聊天内容 */
   box-shadow:
     var(--shadow-sm),
     inset 0 1px 0 var(--glass-highlight),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 0 0 1px var(--glass-rim-inner),
+    inset 0 -1px 0 var(--glass-tint);
+  overflow: hidden;
+  isolation: isolate;
 }
 
-/* 环境光缓慢漂移 */
-.input-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 90% at 12% -10%, var(--glass-sheen-strong), transparent 48%),
-    radial-gradient(90% 70% at 88% 120%, var(--glass-sheen), transparent 55%);
-  mix-blend-mode: screen;
-  opacity: 0.8;
-  animation: liquid-input-flow 20s ease-in-out infinite alternate;
-}
-
-/* 镜面扫光 */
-.input-card::after {
-  content: "";
-  position: absolute;
-  top: -80%;
-  bottom: -80%;
-  left: -40%;
-  right: -40%;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 42%,
-    var(--glass-sheen) 50%,
-    transparent 58%
-  );
-  mix-blend-mode: screen;
-  opacity: 0;
-  animation: liquid-input-sheen 14s ease-in-out infinite;
-}
-
-/* 内容在玻璃高光之上 */
-.input-card > * {
+/* 内容在玻璃高光与 rim 之上 */
+.input-card > *:not(.glass-card__rim) {
   position: relative;
-  z-index: 1;
-}
-
-@keyframes liquid-input-flow {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
-  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.04); }
-}
-
-@keyframes liquid-input-sheen {
-  0%   { transform: translateX(-45%) rotate(0.001deg); opacity: 0; }
-  10%  { opacity: 0.45; }
-  60%  { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
-  100% { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
+  z-index: 2;
 }
 
 /* 聚焦时 textarea 底边强调线：从中心向两侧缓缓展开 */

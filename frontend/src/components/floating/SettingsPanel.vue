@@ -8,6 +8,7 @@ import { discoverTools as refreshTools } from "../../composables/toolMetadata";
 import { themeMode, setTheme } from "../../composables/useTheme";
 import { useTabIndicator } from "../../composables/useTabIndicator";
 import type { LLMConfig, HealthResult, VersionInfo, RuntimeStatus, MCPStatusResult } from "../../types/api";
+import type { MorphRect } from "../../utils/fluidMorph";
 
 interface SavedSettings {
   base_url?: string;
@@ -18,6 +19,8 @@ interface SavedSettings {
 
 const props = defineProps<{
   modelValue: boolean;
+  /** 展开 / 收回的流体变形起点（设置按钮的矩形） */
+  morphOrigin?: MorphRect | null;
 }>();
 
 const emit = defineEmits<{
@@ -322,6 +325,7 @@ async function save() {
     position="top-right"
     title="设置"
     icon="fa-solid fa-gear"
+    :morph-from="morphOrigin"
     :model-value="modelValue"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('close')"
