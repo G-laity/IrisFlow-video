@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.41.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3 + 卡片玻璃 G1/G2 已完成，当前活跃 backlog 为 A1 二阶动力学。
+IrisFlow v0.42.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃生产化与开始页已完成，当前活跃 backlog 为 A1 二阶动力学。
 
 ## 命令
 
@@ -44,14 +44,15 @@ npx vue-tsc --noEmit             # 类型检查
 - **toolMetadata** — 工具元数据模块级单例，`discoverTools()` 从后端拉取。
 - **useComposer** — 合成器前端状态模块级单例：素材 / 项目 / 渲染 + SSE 订阅（断线重连），多浮窗共享。
 - **TimelineTracks** — 轨道式时间轴：时间标尺、播放头素材预览、视频块拖拽重排。
+- **开始页** — `/` 路由下 ChatPanel 渲染 hero 输入 + 快捷提示 + 会话/合成器/设置入口；首条消息创建会话后进入 `/chat/:id`；开始页隐藏浮岛按钮与会话列表，进入对话页恢复。
 - **FloatingWindow** — 通用浮窗框架：Teleport、拖拽、置顶、z-index 分层管理。
 - **Markdown** — markdown-it + KaTeX + highlight.js（按需动态加载，首屏不引入）。
 - **无障碍/动效** — 全局 `:focus-visible`（文本控件由边框承担）、`prefers-reduced-motion` 降级、浮窗 `role=dialog`、消息/列表入场与滑动指示框。
-- **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；卡片玻璃统一走 `style.css` 的 `.glass-card`（Blur）/ `.glass-card--tint`（只叠色）/ `.glass-card__rim`（边缘色散），合成顺序 REFRACT → SHADOW → TINT → LIGHT，内容用 `.glass-card__body` 置顶；`useGlassPointer` 指针驱动 SVG 折射（~12fps，掉帧自动停用）。
+- **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；卡片玻璃统一走 `style.css` 的 `.glass-card`（Blur：warp + tint + rim）/ `.glass-card--tint`（只叠色），合成顺序 REFRACT → SHADOW → TINT → LIGHT；`GlassFilters` + `glassLens` 提供全局透镜位移图（边缘 mask + RGB 三通道位移 + 中心回填）；内容用 `.glass-card__body` 置顶；`App.vue` 的 `.app-ambient` 为玻璃提供可折射的环境光。
 
 ## 开发流程
 
 - **PLAN.md** — 视频合成器（IRIS VIDEO COMPOSER）的唯一规划源：M1-M5 全部完成（0.38.0，GA），含数据模型、API 表、ffmpeg 分段渲染管线、TTS/BGM provider 设计。
-- **FRONTEND_OPTIMIZATION_PLAN.md** — 前端优化唯一规划源：P0-P3 已完成（0.40.0），A2 指针玻璃折射已随卡片玻璃 G2 落地（0.41.0）；当前活跃 backlog 为 A1 二阶动力学；B 类 WebGL 仅限 Composer 3D 预览。
+- **FRONTEND_OPTIMIZATION_PLAN.md** — 前端优化唯一规划源：P0-P3 已完成（0.40.0）；A2 指针玻璃折射已由「透镜位移图」方案替代并进入生产（0.41.x）；当前活跃 backlog 为 A1 二阶动力学；B 类 WebGL 仅限 Composer 3D 预览。
 - **不提交的本地文档** — `FRONTEND_OPTIMIZATION_PLAN.md`、`gtwall_REA_逆向分析报告.md` 保持 untracked，不纳入 Git。
 - **工作流**：里程碑开工前将任务写入 `CHANGELOG.md` 待发布区作为开发指令 → `/implementation` 实施 → `/version-bump` 收尾（版本号 + README + CHANGELOG 转正）。版本号单一来源：`backend/pyproject.toml`。

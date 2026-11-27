@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，  
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.42.0
+
+### 添加
+- **开始页**：`/` 路由显示大输入卡 + 快捷提示 + 会话列表 / 视频合成器 / 设置入口；发送首条消息后自动创建会话并进入 `/chat/:id` 正常页；开始页隐藏浮岛按钮与会话列表，进入对话后恢复；支持深/浅主题与现有玻璃效果
+
+### 变更
+- **卡片玻璃生产化**：浮窗与输入框的折射从 `feTurbulence` 噪声改为「透镜位移图 → 边缘 mask → RGB 三通道位移 → 中心回填」；新增 `GlassFilters.vue`（全局 SVG 滤镜）与 `utils/glassLens.ts`（Canvas 2D SDF 位移图）；`.glass-card` 拆为 warp（backdrop 模糊 + 滤镜）/ tint（滤镜之上染色）/ rim / body 四层；浮窗流体变形期间临时关闭透镜滤镜
+- **浅色主题 / 清透玻璃**：tint 调为深色 28% / 浅色 38%，背景模糊 9px，tint 内缩 12px 留出透镜边缘；新增静态 1.5px 渐变 rim；避免 tint 直接进入滤镜导致发灰
+- **环境光背景**：`App.vue` 新增静态 `.app-ambient`（深/浅两套极光色团 + 斜光带 + 细网格），给玻璃边缘提供可折射的结构
+
+### 移除
+- 移除 `useGlassPointer` 与 `index.html` 的 `liquid-glass-refraction` 噪声折射滤镜（由透镜位移图方案取代）
+
 ## 0.41.0
 
 ### 添加

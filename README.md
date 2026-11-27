@@ -1,8 +1,8 @@
 # IrisFlow
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
-[![Status](https://img.shields.io/badge/状态-GA-brightgreen)]()
-[![Version](https://img.shields.io/badge/版本-0.41.0-green)]()
+[![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
+[![Version](https://img.shields.io/badge/版本-0.42.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -46,8 +46,9 @@
 
 | 功能 | 说明 |
 |------|------|
+| 🏠 开始页 | 大输入卡 + 快捷提示 + 会话/合成器/设置入口；发送首条消息后进入正常对话页 |
 | 🪟 浮窗框架 | 通用 FloatingWindow：拖拽、置顶、视口约束、z-index 分层管理；浮岛按钮以流体形态展开 |
-| 🧊 卡片玻璃 | 三级玻璃（Blur / Tint / 实色回退）+ 四点掠射 + 1px 边缘色散 + 指针驱动折射 |
+| 🧊 卡片玻璃 | 三级玻璃（Blur / Tint / 实色回退）+ 透镜位移图 + 边缘 mask + RGB 色散 + 环境光 |
 | 📋 会话列表 | 按日期分组、置顶、重命名、删除、状态灯 |
 | 🔍 工作流日志 | Agent 推理步骤时间线（思考 → 工具调用 → 结果），工具结果 JSON 高亮 |
 | ⚙️ 设置面板 | 标签页式：服务器 / LLM / MCP / 密钥 / 默认参数 / 关于，全量配置持久化到 JSON 文件（无 `.env`，`${VAR}` 密钥引用） |
@@ -161,7 +162,7 @@ cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.41.0",...}
+# → {"name":"IrisFlow","version":"0.42.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -251,8 +252,8 @@ IrisFlow/
 │   │   ├── App.vue               #   根组件 — 会话列表 + 聊天面板 + 动态浮窗 + 心跳
 │   │   ├── api/client.ts         #   fetch 封装 + SSE 流式 + 可配置后端地址
 │   │   ├── constants.ts          #   全模块共享常量
-│   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + useTheme + useTabIndicator + windowZIndex + useGlassPointer
-│   │   ├── utils/                #   纯函数 + Markdown 渲染（懒加载）+ 工具调用文本清洗 + 媒体类型判定 + fluidMorph 弹簧关键帧
+│   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + useTheme + useTabIndicator + windowZIndex
+│   │   ├── utils/                #   纯函数 + Markdown 渲染（懒加载）+ 工具调用文本清洗 + 媒体类型判定 + fluidMorph 弹簧关键帧 + glassLens 透镜位移图
 │   │   └── components/           #   Vue SFC 组件
 │   │       ├── floating/          #     浮窗子窗体（全部基于 FloatingWindow 框架）
 │   │       │   ├── FloatingWindow.vue    #     通用浮窗框架 — 可拖拽 + 置顶 + 视口约束
@@ -268,7 +269,8 @@ IrisFlow/
 │   │       │   ├── StoryboardEditor.vue  #     分镜编辑器 — 镜头卡片 + 字幕列表 + 旁白/BGM 轨（PATCH 即存）
 │   │       │   ├── RenderQueue.vue       #     渲染队列 — 进度条 + 状态灯 + 取消 + 成品预览/下载
 │   │       │   └── TimelineTracks.vue    #     轨道式时间轴 — 标尺 + 播放头预览 + 拖拽重排
-│   │       ├── ChatPanel.vue      #     聊天面板 — 消息滚动 + 会话加载
+│   │       ├── GlassFilters.vue   #     全局玻璃滤镜 — 透镜位移图 + 边缘 mask + RGB 色散
+│   │       ├── ChatPanel.vue      #     聊天面板 — 开始页 + 消息滚动 + 会话加载
 │   │       ├── ChatInput.vue      #     输入框 — 工具切换 + 思考开关 + 文件上传
 │   │       ├── MessageBubble.vue  #     消息气泡 — Markdown 渲染 + 思考过程
 │   │       ├── SessionSettingsPanel.vue  #  会话参数面板 — 预设胶囊 + 基础/高级标签页
