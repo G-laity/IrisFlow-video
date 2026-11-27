@@ -1,13 +1,13 @@
 # CLAUDE.md
 
-IrisFlow v0.40.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。
+IrisFlow v0.41.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3 + 卡片玻璃 G1/G2 已完成，当前活跃 backlog 为 A1 二阶动力学。
 
 ## 命令
 
 ```bash
 # 后端
 cd backend && uv sync
-uv run uvicorn main:app --reload --timeout-graceful-shutdown 3
+uv run python -m uvicorn main:app --reload --timeout-graceful-shutdown 3   # 避免重定位 venv 的 shebang 问题
 uv run pyright --project pyrightconfig.json   # 类型检查
 
 # 前端
@@ -34,7 +34,7 @@ npx vue-tsc --noEmit             # 类型检查
 - **context.py** — 上下文压缩：超预算时截断长工具结果 + 丢弃最老轮次，仅作用于请求副本。
 - **sessions.py** — `SessionStore`：SQLite 持久化 + LRU（100）+ TTL（1h），`asyncio.Lock` 守护。
 - **router.py** — 统一 FIFO 队列 + LLM 健康门控 + 并发控制，`asyncio.shield()` 保护 cleanup。
-- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目/渲染 CRUD + 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT/ASS）、`tts.py`（三级降级 + 长文本分句 + 多说话人）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（探测 + 分段渲染/xfade/Ken Burns/ASS/侧链混音命令 + 进度解析）、`queue.py`（渲染队列 + 状态机 + 取消/优雅关闭）、`maintenance.py`（磁盘 LRU 回收）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；本地模型 sidecar 见 `deploy/`（端口 9701/9702）。
+- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目/渲染 CRUD + 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT/ASS）、`tts.py`（三级降级 + 长文本分句 + 多说话人）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（探测 + 分段渲染/xfade/Ken Burns/ASS/侧链混音命令 + 进度解析）、`queue.py`（渲染队列 + 状态机 + 取消/优雅关闭）、`maintenance.py`（磁盘 LRU 回收）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；sidecar 脚本见 `deploy/`，本机实际安装在项目外（默认 `E:\NT\IrisFlow-sidecars`，CosyVoice 9701 / Stable Audio 9702，约 20GB，不随后端自动启动）。
 - **constants.py / constants.ts** — 前后端共享常量，无硬编码字符串。
 
 ## 前端架构
@@ -45,11 +45,13 @@ npx vue-tsc --noEmit             # 类型检查
 - **useComposer** — 合成器前端状态模块级单例：素材 / 项目 / 渲染 + SSE 订阅（断线重连），多浮窗共享。
 - **TimelineTracks** — 轨道式时间轴：时间标尺、播放头素材预览、视频块拖拽重排。
 - **FloatingWindow** — 通用浮窗框架：Teleport、拖拽、置顶、z-index 分层管理。
-- **Markdown** — markdown-it + KaTeX + highlight.js。
+- **Markdown** — markdown-it + KaTeX + highlight.js（按需动态加载，首屏不引入）。
 - **无障碍/动效** — 全局 `:focus-visible`（文本控件由边框承担）、`prefers-reduced-motion` 降级、浮窗 `role=dialog`、消息/列表入场与滑动指示框。
-- **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；浮窗与输入框液态玻璃（SVG 折射渐进增强 + 流动高光）。
+- **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；卡片玻璃统一走 `style.css` 的 `.glass-card`（Blur）/ `.glass-card--tint`（只叠色）/ `.glass-card__rim`（边缘色散），合成顺序 REFRACT → SHADOW → TINT → LIGHT，内容用 `.glass-card__body` 置顶；`useGlassPointer` 指针驱动 SVG 折射（~12fps，掉帧自动停用）。
 
 ## 开发流程
 
 - **PLAN.md** — 视频合成器（IRIS VIDEO COMPOSER）的唯一规划源：M1-M5 全部完成（0.38.0，GA），含数据模型、API 表、ffmpeg 分段渲染管线、TTS/BGM provider 设计。
+- **FRONTEND_OPTIMIZATION_PLAN.md** — 前端优化唯一规划源：P0-P3 已完成（0.40.0），A2 指针玻璃折射已随卡片玻璃 G2 落地（0.41.0）；当前活跃 backlog 为 A1 二阶动力学；B 类 WebGL 仅限 Composer 3D 预览。
+- **不提交的本地文档** — `FRONTEND_OPTIMIZATION_PLAN.md`、`gtwall_REA_逆向分析报告.md` 保持 untracked，不纳入 Git。
 - **工作流**：里程碑开工前将任务写入 `CHANGELOG.md` 待发布区作为开发指令 → `/implementation` 实施 → `/version-bump` 收尾（版本号 + README + CHANGELOG 转正）。版本号单一来源：`backend/pyproject.toml`。

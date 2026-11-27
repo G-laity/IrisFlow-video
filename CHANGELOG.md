@@ -5,7 +5,17 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，  
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## 待发布
+## 0.41.0
+
+### 添加
+- **浮岛按钮流体变形**：设置 / 视频合成器 / 会话列表 / 会话参数按钮点击后，从按钮矩形以高阻尼二阶弹簧展开为面板；尺寸与圆角按弹簧关键帧联动，内容层固定尺寸、由外壳裁切揭示，展开过程中即可看到卡片内容；关闭时反向收回按钮
+- **卡片玻璃 G1（Card Glass）**：`style.css` 新增 `--glass-rim-inner / --glass-tint / --glass-sheen-warm / --glass-dispersion-r/g/b` 明暗 token；新增全局 `.glass-card`（Blur）/ `.glass-card--tint` / `.glass-card__rim` / `.glass-card__body`，固化 REFRACT → SHADOW → TINT → LIGHT 合成顺序；浮窗与输入框换用 `.glass-card`，胶囊按钮降为 Tint 玻璃；四点掠射环境光 + 1px 边缘色散
+- **卡片玻璃 G2（推广 + 指针折射）**：用户消息气泡、消息文件卡、会话列表活动条目应用 Tint 玻璃 rim；新增 `useGlassPointer`，指针悬停玻璃时以 12fps 微调 SVG `feTurbulence` 的 `baseFrequency`（触摸 / `prefers-reduced-motion` 跳过；连续掉帧自动退回静态玻璃）
+
+### 变更
+- 浮岛入口统一为 56×32 纯图标胶囊，设置 / 视频合成器 / 会话列表尺寸一致；打开对应面板时按钮隐藏，关闭时面板收回按钮位置后再淡入
+- 玻璃按用途分级：浮窗 / 输入框为 Blur 玻璃，胶囊 / 用户气泡 / 消息文件卡 / 活动会话条目为 Tint 玻璃；assistant 正文保持无底色，避免聊天区整屏卡片化
+- 设置面板打开时隐藏其下方的视频合成器按钮，避免半透明玻璃透出残影
 
 ## 0.40.0
 

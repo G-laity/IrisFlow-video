@@ -1,6 +1,6 @@
 [project]
 name = "backend"
-version = "0.40.0"
+version = "0.41.0"
 description = "IrisFlow 后端服务 — LLM Chat + Agent 控制台"
 readme = "README.md"
 requires-python = ">=3.14"
