@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.42.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃生产化与开始页已完成，当前活跃 backlog 为 A1 二阶动力学。
+IrisFlow v0.43.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃（纯折射 + 软→正式透镜淡入）与开始页已完成；合成器动效与 sidecar 启动器已落地；当前活跃 backlog 为 A1 二阶动力学。
 
 ## 命令
 
@@ -34,7 +34,7 @@ npx vue-tsc --noEmit             # 类型检查
 - **context.py** — 上下文压缩：超预算时截断长工具结果 + 丢弃最老轮次，仅作用于请求副本。
 - **sessions.py** — `SessionStore`：SQLite 持久化 + LRU（100）+ TTL（1h），`asyncio.Lock` 守护。
 - **router.py** — 统一 FIFO 队列 + LLM 健康门控 + 并发控制，`asyncio.shield()` 保护 cleanup。
-- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目/渲染 CRUD + 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT/ASS）、`tts.py`（三级降级 + 长文本分句 + 多说话人）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（探测 + 分段渲染/xfade/Ken Burns/ASS/侧链混音命令 + 进度解析）、`queue.py`（渲染队列 + 状态机 + 取消/优雅关闭）、`maintenance.py`（磁盘 LRU 回收）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；sidecar 脚本见 `deploy/`，本机实际安装在项目外（默认 `E:\NT\IrisFlow-sidecars`，CosyVoice 9701 / Stable Audio 9702，约 20GB，不随后端自动启动）。
+- **composer/** — 视频合成器域包：`store.py`（SQLite 三表 + 项目/渲染 CRUD + 引用计数）、`assets.py`（下载 + hash 去重 + MIME 判型 + ffprobe 探测）、`timeline.py`（时间轴校验 + SRT/ASS）、`tts.py`（三级降级 + 长文本分句 + 多说话人）、`music.py`（Stable Audio sidecar）、`ffmpeg.py`（探测 + 分段渲染/xfade/Ken Burns/ASS/侧链混音命令 + 进度解析）、`queue.py`（渲染队列 + 状态机 + 取消/优雅关闭）、`maintenance.py`（磁盘 LRU 回收）、`sidecars.py`（sidecar 健康 + 日志尾部快照）、`router.py`（`/api/composer/*` REST + SSE）。`data/composer/` 为存储根；sidecar 脚本见 `deploy/`，本机实际安装在项目外（默认 `E:\NT\IrisFlow-sidecars`，CosyVoice 9701 / Stable Audio 9702，约 20GB，不随后端自动启动；用 `deploy/start_sidecars.py` 一键启动两个，后端通过 `GET /api/composer/sidecars` 读取健康和日志）。
 - **constants.py / constants.ts** — 前后端共享常量，无硬编码字符串。
 
 ## 前端架构

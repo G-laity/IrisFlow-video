@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，  
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.43.0
+
+### 添加
+- **本地模型 sidecar 一键启动器**：新增 `deploy/start_sidecars.py`，同时拉起 CosyVoice（9701）与 Stable Audio（9702），等待 `/health` 就绪；已健康运行的 sidecar 复用，不重复启动；日志写入 `logs/sidecars/*.log`；某个退出时继续照看另一个，Ctrl+C 统一停止（`taskkill /T`）；模型保持懒加载
+- **后端 sidecar 健康 / 日志接口**：新增 `composer/sidecars.py` 与 `GET /api/composer/sidecars?lines=N`，返回 `reachable` / `model_ok` / `health` / `log_path` / `log_tail`；后端不管理 sidecar 进程，重启或 `--reload` 不受影响
+- **合成器动效**：标签页复用 `useTabIndicator` 滑动指示器，内容横向淡入；素材库 TTS/BGM 与项目页「新建项目」平滑折叠展开；分镜/轨道视图交叉淡入；开始页与渲染完成 toast 的浮窗流体展开从被点击按钮矩形开始
+- **玻璃收尾**：浮窗形变期间只显示软透镜（模糊），结束后 220ms 内把透镜位移 scale 缓动到满强度；每个浮窗克隆独立透镜滤镜，面板之间互不影响
+
+### 变更
+- **玻璃材质简化**：生产浮窗移除 tint / 四点高光 / 扫光 / rim / 1px 边框，只保留 warp（backdrop 模糊 + 透镜位移）+ 外投影；聊天输入框恢复加玻璃前的实色卡片（`--bg-primary` + `--border`，无模糊/阴影）；消息气泡和条目继续使用 tint + inset 高光
+- **浮窗形变**：形变期间保留非 none 的滤镜（零位移 scale）以维持 `backdrop-filter` 渲染；软 → 正式透镜改为逐帧 scale 缓动，解决形变中玻璃缺失和结束时透镜突现
+- **文档**：README / `deploy/README.md` 更新 sidecar 启动器、健康日志接口和手动启动说明；CLAUDE.md 补充 sidecar 启动方式与模块
+
+### 修复
+- **玻璃透明 bug**：移除叠层中的 `mix-blend-mode: screen`，避免 Chromium 在几何动画/透明度过渡时跳过 `backdrop-filter`（浮窗曾表现为完全透明）
+- **浮窗形变期间玻璃缺失**：不再把 warp 的滤镜设为 `none`，改用零位移的实例滤镜保持模糊；透镜在形变结束后淡入
+- **合成器展开生硬**：标签切换、TTS/BGM 生成面板、新建项目表单、分镜/轨道视图增加平滑过渡
+- **浮窗入口动效不同步**：开始页入口此前取不到已隐藏的浮岛胶囊矩形，导致没有流体展开；现在由 ChatPanel 传递触发按钮矩形，toast 也从自身位置展开
+
 ## 0.42.0
 
 ### 添加

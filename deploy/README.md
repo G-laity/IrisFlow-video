@@ -120,7 +120,22 @@ cd ..\stable-audio
 .\setup.ps1
 ```
 
-首次运行会下载数 GB 权重，耗时较长。`setup.ps1` 只做一次性安装；启动服务：
+首次运行会下载数 GB 权重，耗时较长。`setup.ps1` 只做一次性安装；启动服务（推荐一键启动两个，
+在仓库根目录执行）：
+
+```powershell
+python deploy\start_sidecars.py
+# 或者从 backend 目录使用 uv：
+# cd backend; uv run python ..\deploy\start_sidecars.py
+```
+
+- 同时拉起 CosyVoice（9701）和 Stable Audio（9702），等待 `/health` 就绪
+- 日志固定写到 `logs/sidecars/cosyvoice.log` / `logs/sidecars/stable-audio.log`
+- 模型仍是懒加载：`/health` 就绪只代表 HTTP 服务已启动，第一次 TTS/BGM 请求才加载权重
+- 已健康运行的 sidecar 会被复用；某个退出时启动器继续照看另一个；Ctrl+C 统一停止（`taskkill /T`）
+- 启动器只负责 sidecar，后端仍按原来的命令单独启动
+
+手动启动（两个终端）仍然可用，但不会写入上面的日志文件：
 
 ```powershell
 # 终端 1 — 语音
@@ -139,6 +154,24 @@ curl http://127.0.0.1:9702/health   # {"status":"ok","model":"stable-audio-open-
 
 后端 `GET /api/composer/config` 的 `providers` 字段会显示各 provider 的 `reachable` 状态，
 合成器面板的素材页也会显示服务可用性。
+
+## 后端读取健康与日志
+
+后端不管理 sidecar 进程，只提供只读快照：
+
+```powershell
+curl "http://localhost:8000/api/composer/sidecars?lines=200"
+```
+
+返回两个 sidecar 的：
+
+- `reachable` / `model_ok`：`/health` 连通且模型名匹配
+- `health`：sidecar 的 `/health` JSON
+- `log_path`：日志文件路径
+- `log_tail`：最近 N 行日志（`lines` 默认 120，上限 500）
+
+健康探测优先使用 composer 配置里的本地 `tts.base_url` / `music.base_url`；配置成云端时回退到
+默认本地端口 9701/9702。日志来自一键启动器；用 `serve.ps1` 手动启动时该文件可能为空。
 
 ## 降级链（无需 sidecar 也能工作）
 

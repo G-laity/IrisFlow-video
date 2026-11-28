@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.42.0-green)]()
+[![Version](https://img.shields.io/badge/版本-0.43.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -48,7 +48,7 @@
 |------|------|
 | 🏠 开始页 | 大输入卡 + 快捷提示 + 会话/合成器/设置入口；发送首条消息后进入正常对话页 |
 | 🪟 浮窗框架 | 通用 FloatingWindow：拖拽、置顶、视口约束、z-index 分层管理；浮岛按钮以流体形态展开 |
-| 🧊 卡片玻璃 | 三级玻璃（Blur / Tint / 实色回退）+ 透镜位移图 + 边缘 mask + RGB 色散 + 环境光 |
+| 🧊 玻璃材质 | 浮窗：模糊 + 透镜位移图 + 边缘 mask + RGB 色散 + 环境光（形变时软透镜淡入正式透镜）；消息/条目：tint + inset 高光；不支持 `backdrop-filter` 时回退实色 |
 | 📋 会话列表 | 按日期分组、置顶、重命名、删除、状态灯 |
 | 🔍 工作流日志 | Agent 推理步骤时间线（思考 → 工具调用 → 结果），工具结果 JSON 高亮 |
 | ⚙️ 设置面板 | 标签页式：服务器 / LLM / MCP / 密钥 / 默认参数 / 关于，全量配置持久化到 JSON 文件（无 `.env`，`${VAR}` 密钥引用） |
@@ -64,6 +64,7 @@
 | **LLM 网关** | OpenAI-compatible API | Chat + Agent 推理（流式 / 思考 / 工具调用） |
 | **工具引擎** | 内置工具 + MCP | DuckDuckGo / trafilatura / Playwright / GitHub / Agnes AI |
 | **会话持久化** | SQLite | 会话上下文重启后自动恢复 |
+| **本地模型 sidecar** | CosyVoice 2.5 / Stable Audio Open Small（独立 Python 3.10 venv + HTTP） | 合成器旁白 / BGM（可选；`deploy/start_sidecars.py` 一键启动） |
 | **Markdown** | markdown-it + KaTeX + highlight.js | 公式渲染 + 代码高亮 |
 
 ## 🚀 快速开始
@@ -82,7 +83,7 @@
 ### 1. 克隆仓库
 
 ```bash
-git clone https://github.com/Laity999/IrisFlow-video.git
+git clone https://github.com/G-laity/IrisFlow-video.git
 cd IrisFlow-video
 ```
 
@@ -130,21 +131,50 @@ sudo apt install ffmpeg
 
 ### 5. 本地模型 sidecar（视频合成器可选）
 
-旁白与 BGM 生成可选用本地模型（CosyVoice / Stable Audio），以独立进程运行。
-需要 NVIDIA GPU（两个模型均走 GPU 推理；RTX 50 系需驱动支持 **CUDA 12.8+**，显存各约 2-3 GB）：
+旁白与 BGM 生成可选用本地模型（CosyVoice / Stable Audio），以独立 HTTP 进程运行，与后端
+完全解耦。CosyVoice 建议 NVIDIA GPU；Stable Audio 支持 GPU / CPU。RTX 50 系需 CUDA 12.8+
+的 torch；两个模型都常驻时显存各约 2-3 GB，默认懒加载。
 
 ```powershell
 # 首次安装（含国内源与 Windows 兼容补丁，详见 deploy/README.md）
 pushd deploy\cosyvoice;    .\setup.ps1; popd
 pushd deploy\stable-audio; .\setup.ps1; popd
-
-# 启动服务（各开一个终端）
-cd deploy\cosyvoice;    .\serve.ps1    # 语音，端口 9701
-cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
 ```
 
-启动后可用 `curl http://127.0.0.1:9701/health` 与 `curl http://127.0.0.1:9702/health` 验证；
-模型在收到首个合成请求时加载（CosyVoice 约 10s、Stable Audio 约 80s）。
+**一键启动两个 sidecar**（在仓库根目录执行；启动器只负责 sidecar，后端仍按上面的命令启动）：
+
+```powershell
+python deploy\start_sidecars.py
+# 或从 backend 目录：cd backend; uv run python ..\deploy\start_sidecars.py
+```
+
+- 同时拉起 CosyVoice（9701）和 Stable Audio（9702），等待 `/health` 就绪
+- 日志写入 `logs/sidecars/cosyvoice.log` / `logs/sidecars/stable-audio.log`
+- 已健康运行的 sidecar 会复用；某个退出时继续照看另一个；Ctrl+C 统一停止
+- 模型仍是懒加载：`/health` 就绪只代表 HTTP 服务启动，第一次 TTS/BGM 请求才加载权重
+  （CosyVoice 约 10s、Stable Audio 约 80s）
+
+也可以手动各开一个终端：
+
+```powershell
+# 终端 1（仓库根目录）
+cd deploy\cosyvoice; .\serve.ps1     # 语音，端口 9701
+
+# 终端 2（仓库根目录）
+cd deploy\stable-audio; .\serve.ps1  # 背景音乐，端口 9702
+```
+
+启动后可验证：
+
+```powershell
+curl http://127.0.0.1:9701/health
+curl http://127.0.0.1:9702/health
+# 后端健康 + 日志尾部（需要后端已启动）
+curl "http://localhost:8000/api/composer/sidecars?lines=200"
+```
+
+`/api/composer/sidecars` 返回每个 sidecar 的 `reachable`、`model_ok`、`health`、`log_path`
+和 `log_tail`。手动用 `serve.ps1` 启动时不会写上面的日志文件。
 
 **不部署也能工作**——语音自动降级到 edge-tts（免费、需联网），音乐可上传现成 BGM。
 完整部署说明见 [`deploy/README.md`](./deploy/README.md)。
@@ -162,7 +192,7 @@ cd deploy\stable-audio; .\serve.ps1    # 背景音乐，端口 9702
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.42.0",...}
+# → {"name":"IrisFlow","version":"0.43.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -204,6 +234,7 @@ curl http://localhost:8000/api/health
 | `/api/composer/renders/{id}/file` | GET | 成品 MP4 流式播放（Range）/ `?download=1` 下载 |
 | `/api/composer/status-stream` | GET | 合成器事件流（SSE：素材 / 项目变更） |
 | `/api/composer/config` | GET / PUT | 合成器配置 + ffmpeg / TTS / 音乐 provider 探测 |
+| `/api/composer/sidecars` | GET | 本地模型 sidecar 健康状态 + 日志尾部（由一键启动器写入） |
 | `/api/composer/templates` | GET | 项目模板（产品介绍 / 口播 / 图文混排） |
 | `/api/composer/maintenance/usage` | GET | 磁盘占用快照（上限 / 目标水位 / 自动清理开关） |
 | `/api/composer/maintenance/cleanup` | POST | 手动执行磁盘 LRU 回收（未引用素材 → 旧渲染产物） |
@@ -243,10 +274,12 @@ IrisFlow/
 │   │   ├── maintenance.py        #   磁盘占用快照 + LRU 回收（未引用素材 / 旧渲染）
 │   │   ├── ffmpeg.py             #   ffmpeg 探测 + 分段渲染 / xfade / Ken Burns / ASS 字幕 / 混音命令 + 进度解析
 │   │   ├── queue.py              #   渲染队列：FIFO + worker + 状态机 + 取消 / 优雅关闭
-│   │   └── router.py             #   REST + SSE 路由（素材 / 项目 / 渲染 / 配置 / 状态流）
+│   │   ├── router.py             #   REST + SSE 路由（素材 / 项目 / 渲染 / 配置 / 状态流）
+│   │   └── sidecars.py           #   本地 sidecar 健康 + 日志尾部快照（只读）
 │   ├── data/                     # 配置 JSON + SQLite 数据库（sessions.db）
 │   ├── pyproject.toml
 │   └── pyrightconfig.json
+├── deploy/                      # 本地模型 sidecar 安装 / 启动脚本（setup / serve / start_sidecars）
 ├── frontend/                    # 前端（Vite + Vue 3）
 │   ├── src/
 │   │   ├── App.vue               #   根组件 — 会话列表 + 聊天面板 + 动态浮窗 + 心跳

@@ -25,6 +25,7 @@ from composer import music as composer_music
 from composer import timeline as composer_timeline
 from composer import tts as composer_tts
 from composer.queue import render_queue
+from composer.sidecars import snapshot as sidecar_snapshot
 from composer.store import composer_store
 from llm.constants import (
     COMPOSER_KIND_AUDIO,
@@ -638,6 +639,17 @@ async def _config_response() -> dict[str, object]:
             "music": await composer_music.probe(),
         },
     }
+
+
+@router.get("/sidecars")
+async def get_sidecars(lines: int = 120):
+    """本地模型 sidecar 的健康状态与最近日志。
+
+    进程由 deploy/start_sidecars.py 负责启动/停止；这里只读取：
+    - http://127.0.0.1:<port>/health
+    - logs/sidecars/<name>.log 的尾部
+    """
+    return await sidecar_snapshot(lines)
 
 
 @router.get("/config")
