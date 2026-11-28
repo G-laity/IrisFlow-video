@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from "vue";
-import { COPY_FEEDBACK_DURATION, ROLE_ASSISTANT, ROLE_USER, UI_COPIED, UI_COPY } from "../constants";
-import type { UIMessage, PreviewPayload } from "../types/api";
+import { COPY_FEEDBACK_DURATION, ROLE_ASSISTANT, ROLE_USER, UI_COPIED, UI_COPY, UI_DOWNLOAD, UI_MEDIA_ASSET, UI_MEDIA_RENDER } from "../constants";
+import type { UIMediaItem, UIMessage, PreviewPayload } from "../types/api";
 import { fileIcon, filePreview } from "../utils";
 import { renderMarkdown, mediaKindFromUrl } from "../utils/markdown";
 import { sanitizeToolCallMarkup } from "../utils/toolCall";
@@ -76,8 +76,20 @@ onUnmounted(() => {
   if (_renderTimer) clearTimeout(_renderTimer);
 });
 
-/** 空内容的 assistant 气泡不展示 */
-const isEmpty = computed(() => props.msg.role === ROLE_ASSISTANT && !props.msg.content);
+/** 空内容且无视频的 assistant 气泡不展示 */
+const isEmpty = computed(
+  () => props.msg.role === ROLE_ASSISTANT && !props.msg.content && !props.msg.media?.length,
+);
+
+function formatDuration(seconds: number): string {
+  return `${seconds >= 10 ? seconds.toFixed(0) : seconds.toFixed(1)}s`;
+}
+
+function openMedia(item: UIMediaItem): void {
+  if (item.kind === "image" || item.kind === "video") {
+    emit("preview", { kind: item.kind, src: item.src });
+  }
+}
 
 async function handleCopy() {
   try {
@@ -118,6 +130,54 @@ async function handleCopy() {
         @click="handleContentClick"
       />
       <div v-if="!renderedContent && displayContent" class="content">{{ displayContent }}</div>
+      <div v-if="msg.media?.length && msg.role === ROLE_ASSISTANT" class="msg-media">
+        <template v-for="m in msg.media" :key="m.src">
+          <figure
+            v-if="m.kind !== 'audio'"
+            class="msg-media-card"
+            role="button"
+            tabindex="0"
+            :aria-label="m.title"
+            @click="openMedia(m)"
+            @keydown.enter="openMedia(m)"
+            @keydown.space.prevent="openMedia(m)"
+          >
+            <div class="msg-media-thumb">
+              <img v-if="m.kind === 'image'" :src="m.src" loading="lazy" alt="" />
+              <video v-else :src="m.src" preload="metadata" muted playsinline></video>
+              <span v-if="m.kind === 'video'" class="msg-media-play" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+            </div>
+            <figcaption class="msg-media-meta">
+              <span class="msg-media-badge" :class="`msg-media-badge--${m.source}`">
+                {{ m.source === "render" ? UI_MEDIA_RENDER : UI_MEDIA_ASSET }}
+              </span>
+              <span class="msg-media-title" :title="m.title">{{ m.title }}</span>
+              <span v-if="m.duration" class="msg-media-duration">{{ formatDuration(m.duration) }}</span>
+              <a
+                v-if="m.downloadUrl"
+                class="msg-media-download"
+                :href="m.downloadUrl"
+                target="_blank"
+                rel="noopener"
+                @click.stop
+              >{{ UI_DOWNLOAD }}</a>
+            </figcaption>
+          </figure>
+          <figure v-else class="msg-media-card msg-media-card--audio">
+            <div class="msg-media-audio">
+              <i class="fa-solid fa-music" aria-hidden="true"></i>
+              <audio :src="m.src" controls preload="metadata"></audio>
+            </div>
+            <figcaption class="msg-media-meta">
+              <span class="msg-media-badge" :class="`msg-media-badge--${m.source}`">
+                {{ m.source === "render" ? UI_MEDIA_RENDER : UI_MEDIA_ASSET }}
+              </span>
+              <span class="msg-media-title" :title="m.title">{{ m.title }}</span>
+              <span v-if="m.duration" class="msg-media-duration">{{ formatDuration(m.duration) }}</span>
+            </figcaption>
+          </figure>
+        </template>
+      </div>
     </div>
 
     <!-- 复制按钮：气泡下方，靠两侧 -->
@@ -253,6 +313,104 @@ async function handleCopy() {
     inset 0 0 0 1px var(--glass-rim-inner);
 }
 .msg-file-card:hover { background: var(--white-18); }
+
+/* 助手消息里的本地视频（composer_list_videos 结果） */
+.msg-media {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-bottom: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.msg-media-card {
+  flex: 0 0 min(300px, 78vw);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.msg-media-card:hover,
+.msg-media-card:focus-visible { border-color: var(--accent); }
+.msg-media-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.msg-media-thumb { position: relative; }
+.msg-media-thumb video,
+.msg-media-thumb img {
+  display: block;
+  width: 100%;
+  max-height: 190px;
+  background: #000;
+  pointer-events: none;
+}
+.msg-media-thumb img { object-fit: cover; background: var(--bg-secondary); }
+.msg-media-card--audio { cursor: default; }
+.msg-media-card--audio:hover { border-color: var(--border); }
+.msg-media-audio {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px;
+  background: var(--bg-primary);
+}
+.msg-media-audio > i { color: var(--accent); font-size: 16px; }
+.msg-media-audio audio { flex: 1; min-width: 0; height: 32px; }
+.msg-media-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.5);
+  color: var(--white);
+  font-size: 14px;
+  pointer-events: none;
+}
+.msg-media-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.msg-media-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+.msg-media-badge--asset {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+.msg-media-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-media-duration {
+  flex: 0 0 auto;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.msg-media-download {
+  flex: 0 0 auto;
+  color: var(--accent);
+  text-decoration: none;
+}
+.msg-media-download:hover { text-decoration: underline; }
 
 .msg-file-icon { font-size: 21px; color: var(--white-85); margin-bottom: 2px; }
 

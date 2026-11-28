@@ -14,10 +14,7 @@ import {
 } from "../../constants";
 import {
   activeProjectId,
-  refreshComposerAssets,
   refreshComposerConfig,
-  refreshComposerProjects,
-  refreshComposerRenders,
   startComposerEvents,
   stopComposerEvents,
 } from "../../composables/useComposer";
@@ -56,10 +53,8 @@ function onProjectSelected(): void {
 // ── 生命周期：状态初始化 + SSE 订阅 ──────────────
 
 onMounted(() => {
-  refreshComposerAssets();
+  // 各标签页组件常驻挂载并各自预取；这里只拉取共享配置和订阅事件
   refreshComposerConfig();
-  refreshComposerProjects();
-  refreshComposerRenders();
   startComposerEvents();
 });
 
@@ -97,18 +92,15 @@ onUnmounted(() => {
       </div>
 
       <div class="cp-content">
-        <Transition name="cp-switch">
-          <div :key="activeTab" class="cp-tab-body">
-            <AssetLibrary v-if="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
-            <ProjectList v-else-if="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
-            <StoryboardEditor v-else-if="activeTab === UI_TAB_TIMELINE" />
-            <RenderQueue
-              v-else-if="activeTab === UI_TAB_RENDERS"
-              :project-id="activeProjectId || undefined"
-              @preview="payload => emit('preview', payload)"
-            />
-          </div>
-        </Transition>
+        <!-- 四个标签页常驻挂载（v-show）：数据在启动时预取，切换不再等待首次挂载 -->
+        <AssetLibrary v-show="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
+        <ProjectList v-show="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
+        <StoryboardEditor v-show="activeTab === UI_TAB_TIMELINE" />
+        <RenderQueue
+          v-show="activeTab === UI_TAB_RENDERS"
+          :project-id="activeProjectId || undefined"
+          @preview="payload => emit('preview', payload)"
+        />
       </div>
     </div>
   </FloatingWindow>
@@ -175,21 +167,15 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.cp-tab-body { min-height: 0; }
+/* 常驻面板切换时只做淡入，不再重新挂载；display:none → block 会重新触发动画 */
+.cp-content > * { animation: cp-tab-in 0.18s ease; }
 
-/* 标签切换：新内容淡入上移，旧内容绝对定位淡出，避免高度先塌陷 */
-.cp-switch-enter-active { transition: opacity 0.18s ease, transform 0.18s ease; }
-.cp-switch-leave-active {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  transition: opacity 0.14s ease;
+@keyframes cp-tab-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to { opacity: 1; transform: translateX(0); }
 }
-.cp-switch-enter-from { opacity: 0; transform: translateX(8px); }
-.cp-switch-leave-to { opacity: 0; transform: translateX(-8px); }
 
 @media (prefers-reduced-motion: reduce) {
-  .cp-switch-enter-active,
-  .cp-switch-leave-active { transition: none; }
+  .cp-content > * { animation: none; }
 }
 </style>

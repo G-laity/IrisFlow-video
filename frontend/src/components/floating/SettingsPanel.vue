@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, inject, onUnmounted } from "vue";
+import { ref, computed, watch, inject, onMounted, onUnmounted } from "vue";
 import FloatingWindow from "./FloatingWindow.vue";
 import { getLLMConfig, getHealth, updateLLMConfig, getConcurrencyConfig, getMCPConfig, updateMCPConfig, getSecrets, updateSecrets, getVersionInfo, getServerUrl, setServerUrl, isConnectionError, getRuntimeStatus, getMCPStatus, getDefaultSessionSettings, updateDefaultSessionSettings } from "../../api/client";
 import { DEFAULT_MAX_CONCURRENT, MAX_CONCURRENT_UPPER, FACTORY_SESSION_DEFAULTS, HEALTH_STATUS_LABEL, MCP_STATUS_LABEL, THEME_OPTIONS, UI_CLEAR, UI_CLOSE, UI_SAVE, UI_SAVING, UI_SAVE_FAILED, UI_DEFAULT, UI_REFRESH, UI_TAB_APPEARANCE, UI_THEME, UI_THEME_DESC, UI_TAB_SERVER, UI_TAB_LLM, UI_TAB_MCP, UI_TAB_SECRETS, UI_TAB_DEFAULTS, UI_TAB_ABOUT, UI_SERVER_ADDRESS, UI_MCP_SERVERS, UI_LLM_GATEWAY, UI_STATUS_LABEL, UI_UNCONFIGURED, UI_FETCH_FAILED, UI_NO_MCP_SERVERS, UI_MCP_CONFIG_DESC, UI_CONCURRENCY_LIMIT, UI_RUNTIME_INFO, UI_GATEWAY_URL, UI_MODEL_LABEL, UI_AUTH_TOKEN, UI_MAX_CONCURRENT_LABEL, UI_SECRETS_VARS, UI_SECRETS_DESC, UI_ADD_VARIABLE, UI_KEEP_UNCHANGED, UI_ENTER_SECRET_VALUE } from "../../constants";
@@ -251,6 +251,9 @@ async function refresh() {
 
 // FloatingWindow 只隐藏不销毁 → 每次打开时刷新数据
 watch(() => props.modelValue, (v) => { if (v) refresh(); });
+
+// 面板常驻但默认隐藏：启动即预取，避免首次打开才拉配置/密钥
+onMounted(() => { void refresh(); });
 
 async function save() {
   saving.value = true;

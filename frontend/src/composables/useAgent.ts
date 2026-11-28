@@ -35,10 +35,12 @@ import {
   WF_TOOL_CALL,
   WF_TOOL_RESULT,
   FINISH_TOOL_CALLS,
+  TOOL_COMPOSER_LIST_VIDEOS,
   MSG_QUEUED,
   MSG_GENERATING,
   MSG_ABORTED,
 } from "../constants";
+import { appendMedia, parseComposerVideos } from "../utils/composerMedia";
 import type {
   AgentResponse,
   FileAttachment,
@@ -48,6 +50,7 @@ import type {
   ToolCallRaw,
   ToolCallRecord,
   ToolResult,
+  UIMediaItem,
   UIMessage,
   WorkflowEntry,
 } from "../types/api";
@@ -394,6 +397,12 @@ export function useAgent(config: {
                 type: WF_TOOL_RESULT, toolName, rawResult: resultText, isError,
                 text: formatToolResult(toolName, isError),
               });
+              if (!isError && toolName === TOOL_COMPOSER_LIST_VIDEOS) {
+                assistantMsg.media = appendMedia(
+                  assistantMsg.media,
+                  parseComposerVideos(resultText),
+                );
+              }
             } else if (event.type === SSE_SESSION) {
               // session 事件仅用于确认；会话 ID 已在 run() 开头通过 createConversation 获得
             } else if (event.type === SSE_TITLE) {
@@ -585,6 +594,7 @@ export function useAgent(config: {
       }
       if (lastAssistant) {
         const log: WorkflowEntry[] = [];
+        const mediaItems: UIMediaItem[] = [];
         for (const um of currentGroup) {
           if (um.role === ROLE_ASSISTANT && um.thinkContent) {
             log.push({ type: WF_THINK, text: um.thinkContent });
@@ -598,11 +608,17 @@ export function useAgent(config: {
               if (tc.result) {
                 // 有 result 的 tool_call = 结果（来自 tool 消息，合并到了 assistant 的 toolCalls）
                 log.push({ type: WF_TOOL_RESULT, toolName: tc.name || "unknown", rawResult: tc.result, isError: tc.isError ?? false, text: formatToolResult(tc.name || "unknown", tc.isError ?? false) });
+                if (!(tc.isError ?? false) && tc.name === TOOL_COMPOSER_LIST_VIDEOS) {
+                  mediaItems.push(...parseComposerVideos(tc.result));
+                }
               }
             }
           }
         }
         if (log.length) lastAssistant.workflowLog = log;
+        if (mediaItems.length) {
+          lastAssistant.media = appendMedia(lastAssistant.media, mediaItems);
+        }
         // 组内其余 assistant（仅有 tool_calls 无正文）是辅助角色，不独立渲染 WorkflowLog
         for (const um of currentGroup) {
           if (um.role === ROLE_ASSISTANT && um !== lastAssistant && !um.content) {
@@ -848,6 +864,16 @@ export function useAgent(config: {
                   event.is_error === true,
                 ),
               });
+              if (
+                event.is_error !== true &&
+                event.name === TOOL_COMPOSER_LIST_VIDEOS &&
+                typeof event.result === "string"
+              ) {
+                lastAssistant.media = appendMedia(
+                  lastAssistant.media,
+                  parseComposerVideos(event.result),
+                );
+              }
             } else if (event.type === SSE_TITLE) {
               if (event.title)
                 config.onTitleGenerated?.(event.title as string);

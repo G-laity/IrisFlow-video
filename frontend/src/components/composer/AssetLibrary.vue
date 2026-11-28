@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { onMounted, ref } from "vue";
 import {
   generateComposerMusic,
   generateComposerTts,
@@ -48,6 +48,9 @@ import type { ComposerAsset, PreviewPayload } from "../../types/api";
 const emit = defineEmits<{
   preview: [payload: PreviewPayload];
 }>();
+
+// 常驻挂载后立即预取，避免首次打开合成器才拉素材
+onMounted(() => { void refreshComposerAssets(); });
 
 // ── 类型过滤 ──────────────────────────────────────
 

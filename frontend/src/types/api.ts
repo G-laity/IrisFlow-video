@@ -187,7 +187,20 @@ export interface UIMessage {
   images?: string[];
   /** 用户消息附带的文件（图片 + 文档），用于展示文件卡片 */
   files?: FileAttachment[];
+  /** 助手消息附带的本地视频（来自 composer_list_videos） */
+  media?: UIMediaItem[];
   timestamp: number;
+}
+
+/** 助手消息中直接展示的素材 / 成片条目 */
+export interface UIMediaItem {
+  kind: "video" | "image" | "audio";
+  /** 播放 / 查看地址（后端 file_url 已解析为绝对地址） */
+  src: string;
+  title: string;
+  source: "render" | "asset";
+  downloadUrl?: string;
+  duration?: number;
 }
 
 /** 工作流日志条目 */

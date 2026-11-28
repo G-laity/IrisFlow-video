@@ -57,6 +57,8 @@ export const WF_TOOL_RESULT = "tool_result";
 // ── 结束原因 ──────────────────────────────────────
 
 export const FINISH_TOOL_CALLS = "tool_calls";
+/** 合成器视频查询工具（结果会直接渲染成聊天里的视频列表） */
+export const TOOL_COMPOSER_LIST_VIDEOS = "composer_list_videos";
 
 // ── 输入框草稿（无活跃会话时的 key） ──────────────
 
@@ -218,7 +220,7 @@ export const UI_LANDING_TITLE = "让想法开始流动";
 export const UI_LANDING_SUBTITLE = "LLM Chat + Agent · 模型、工具与视频合成器，从一个问题开始。";
 export const UI_LANDING_PLACEHOLDER = "问点什么，一起探索";
 export const UI_LANDING_HINT = "Enter 发送 · Shift + Enter 换行";
-export const UI_LANDING_UPDATE = "IrisFlow v0.43 · 玻璃与合成器动效已上线";
+export const UI_LANDING_UPDATE = "IrisFlow v0.44 · 合成器素材与聊天预览已上线";
 export const UI_LANDING_PROMPTS = [
   "帮我总结这段文字",
   "让 Agent 调用工具查资料",
@@ -285,6 +287,8 @@ export const UI_MORE = "更多";
 export const UI_ON = "开";
 export const UI_OFF = "关";
 export const UI_DOWNLOAD = "下载";
+export const UI_MEDIA_RENDER = "成片";
+export const UI_MEDIA_ASSET = "素材";
 export const UI_OPEN_IN_NEW_TAB = "在新标签页打开";
 export const UI_REFRESH = "刷新状态";
 
