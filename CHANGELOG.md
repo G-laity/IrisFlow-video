@@ -5,6 +5,21 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，  
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.44.0
+
+### 添加
+- **合成器素材查询工具**：`composer_list_videos` 支持 `kind=all/video/image/audio` 与 `limit`，同时返回图片 / 视频 / 音频素材和已完成成片；成片带 `file_url` / `download_url`
+- **聊天内媒体预览**：assistant 消息直接展示工具查询到的图片 / 视频 / 音频卡片；图片和视频点击打开 MediaPreview，音频内联播放，成片可下载；实时流、resume 与历史恢复同样解析
+- **渲染结果链接**：`GET /api/composer/renders/{id}`、渲染列表 / SSE 与 `composer_render_status` 在完成时返回 `file_url` / `download_url`；`output_ready` 同时要求产物存在
+
+### 变更
+- **首开预取**：设置面板启动即预取配置 / 密钥；合成器四个标签页改为常驻挂载（`v-show`），素材 / 项目 / 渲染各自预取；父组件只保留配置与 SSE 订阅，减少重复请求
+- **工具文档**：README 工具生态补充 9 个合成器工具与素材查询能力；项目结构加入 `utils/composerMedia.ts`
+
+### 修复
+- 修复合成器查询只能拿到成片 / 视频素材、拿不到图片 / 音频素材的问题（`kind` 参数）
+- 修复设置 / 合成器标签首次打开时的数据加载与挂载卡顿
+
 ## 0.43.1
 
 ### 变更

@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.43.1-green)]()
+[![Version](https://img.shields.io/badge/版本-0.44.0-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -26,11 +26,12 @@
 | `web_search` | 内置 | DuckDuckGo 网页搜索（Instant Answer + HTML 回退） |
 | `open_url` | 内置 | trafilatura 智能网页内容提取 |
 | `calculator` | 内置 | 安全表达式计算（白名单函数） |
+| `composer_*`（9 个） | 内置 · 合成器 | 视频合成：列出本机素材（图片/视频/音频）与成片 / 创建项目 / 导入素材（URL、Agnes 生成结果）/ 旁白合成 / BGM 生成 / 写入时间轴 / 提交渲染 / 查询渲染状态与成品链接 |
 | `browser_*`（25 个） | MCP · Playwright | 浏览器自动化：导航、点击、输入、截图、页面快照、JS 执行、网络监控 |
 | `github`（40+ 个） | MCP · GitHub Copilot | 仓库管理、代码搜索、Issue/PR 操作、评审评论 |
 | `agnes_*`（3 个） | MCP · Agnes AI | **图像生成**、**视频生成**（文生视频 + 状态查询） |
 
-工具通过标准 MCP 协议（JSON-RPC 2.0 over stdio/HTTP）动态注入，运行时增删服务器自动重连，配置文件变更热重载。
+内置工具分为通用工具和 9 个合成器工具（面板中归入「合成器」组）；MCP 工具通过标准 MCP 协议（JSON-RPC 2.0 over stdio/HTTP）动态注入，运行时增删服务器自动重连，配置文件变更热重载。
 
 ### 会话与数据
 
@@ -192,7 +193,7 @@ curl "http://localhost:8000/api/composer/sidecars?lines=200"
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.43.1",...}
+# → {"name":"IrisFlow","version":"0.44.0",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -229,7 +230,7 @@ curl http://localhost:8000/api/health
 | `/api/composer/projects/{id}/srt` | GET | 下载时间轴字幕 SRT |
 | `/api/composer/projects/{id}/render` | POST | 提交渲染（异步队列，返回 render_id） |
 | `/api/composer/renders` | GET | 渲染任务列表（project_id 过滤） |
-| `/api/composer/renders/{id}` | GET | 渲染详情（状态 + 实时进度 + 错误） |
+| `/api/composer/renders/{id}` | GET | 渲染详情（状态 + 实时进度 + 错误；完成后含 `file_url` / `download_url`） |
 | `/api/composer/renders/{id}/cancel` | POST | 取消渲染（杀 ffmpeg 子进程） |
 | `/api/composer/renders/{id}/file` | GET | 成品 MP4 流式播放（Range）/ `?download=1` 下载 |
 | `/api/composer/status-stream` | GET | 合成器事件流（SSE：素材 / 项目变更） |
@@ -257,7 +258,7 @@ IrisFlow/
 │   │   │   ├── web_search.py       #     网页搜索工具
 │   │   │   ├── calculator.py       #     计算辅助工具
 │   │   │   ├── open_url.py         #     打开网页工具
-│   │   │   └── composer.py         #     合成器八工具（项目 / 导入 / TTS / BGM / 时间轴 / 渲染占位）
+│   │   │   └── composer.py         #     合成器九工具（素材查询 / 项目 / 导入 / TTS / BGM / 时间轴 / 渲染）
 │   │   ├── mcp.py                #   MCP 管理器 — JSON-RPC 2.0 over stdio/HTTP，动态注入 + 热重载
 │   │   ├── sessions.py           #   SessionStore — LRU + TTL + SQLite 持久化
 │   │   ├── uploads.py            #   文件上传（图片多模态 / MarkItDown 文档转换）
@@ -286,7 +287,7 @@ IrisFlow/
 │   │   ├── api/client.ts         #   fetch 封装 + SSE 流式 + 可配置后端地址
 │   │   ├── constants.ts          #   全模块共享常量
 │   │   ├── composables/          #   useAgent + drafts + toolMetadata + useComposer + useTheme + useTabIndicator + windowZIndex
-│   │   ├── utils/                #   纯函数 + Markdown 渲染（懒加载）+ 工具调用文本清洗 + 媒体类型判定 + fluidMorph 弹簧关键帧 + glassLens 透镜位移图
+│   │   ├── utils/                #   纯函数 + Markdown 渲染（懒加载）+ 工具调用文本清洗 + 媒体类型判定 + fluidMorph 弹簧关键帧 + glassLens 透镜位移图 + composerMedia 工具结果→聊天媒体卡
 │   │   └── components/           #   Vue SFC 组件
 │   │       ├── floating/          #     浮窗子窗体（全部基于 FloatingWindow 框架）
 │   │       │   ├── FloatingWindow.vue    #     通用浮窗框架 — 可拖拽 + 置顶 + 视口约束

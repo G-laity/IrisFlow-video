@@ -80,6 +80,11 @@ def _iso_render(render: dict[str, object]) -> dict[str, object]:
         if isinstance(ts, (int, float)):
             from datetime import datetime, timezone
             out[key] = datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    render_id = str(out.get("render_id") or "")
+    if str(out.get("state")) == RENDER_COMPLETED and out.get("output_path") and render_id:
+        base = f"/api/composer/renders/{render_id}/file"
+        out["file_url"] = base
+        out["download_url"] = f"{base}?download=1"
     return out
 
 

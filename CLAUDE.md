@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.43.1 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃（纯折射 + 软→正式透镜淡入）与开始页已完成；合成器动效与 sidecar 启动器已落地；当前活跃 backlog 为 A1 二阶动力学。
+IrisFlow v0.44.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃（纯折射 + 软→正式透镜淡入）与开始页已完成；合成器动效、sidecar 启动器、素材查询与聊天媒体预览已落地；当前活跃 backlog 为 A1 二阶动力学。
 
 ## 命令
 
@@ -47,6 +47,7 @@ npx vue-tsc --noEmit             # 类型检查
 - **开始页** — `/` 路由下 ChatPanel 渲染 hero 输入 + 快捷提示 + 会话/合成器/设置入口；首条消息创建会话后进入 `/chat/:id`；开始页隐藏浮岛按钮与会话列表，进入对话页恢复。
 - **FloatingWindow** — 通用浮窗框架：Teleport、拖拽、置顶、z-index 分层管理。
 - **Markdown** — markdown-it + KaTeX + highlight.js（按需动态加载，首屏不引入）。
+- **composerMedia** — 解析 `composer_list_videos` 工具结果，把图片 / 视频 / 音频素材与成片挂到 assistant 消息并渲染卡片；历史恢复同样解析。
 - **无障碍/动效** — 全局 `:focus-visible`（文本控件由边框承担）、`prefers-reduced-motion` 降级、浮窗 `role=dialog`、消息/列表入场与滑动指示框。
 - **主题/玻璃** — `useTheme`（dark / light / system + View Transitions 圆形扩散）；卡片玻璃统一走 `style.css` 的 `.glass-card`（Blur：warp + tint + rim）/ `.glass-card--tint`（只叠色），合成顺序 REFRACT → SHADOW → TINT → LIGHT；`GlassFilters` + `glassLens` 提供全局透镜位移图（边缘 mask + RGB 三通道位移 + 中心回填）；内容用 `.glass-card__body` 置顶；`App.vue` 的 `.app-ambient` 为玻璃提供可折射的环境光。
 

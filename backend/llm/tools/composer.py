@@ -542,10 +542,131 @@ class ComposerStartRenderTool(Tool):
         })
 
 
+class ComposerListVideosTool(Tool):
+    definition = ToolDefinition(
+        name="composer_list_videos",
+        description=(
+            "列出本机合成器中的素材和已完成渲染成片。"
+            "用户询问「有哪些视频 / 素材 / 图片 / 音频 / 成品视频」时优先调用；"
+            "不要用 web_search 查询本机内容。kind 默认 all（图片 + 视频 + 音频），"
+            "只问视频时传 video，只问图片/音频时传 image/audio。"
+            "返回 asset_id / kind / 文件名 / 时长 / file_url / render_id / download_url 等。"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "enum": ["all", "video", "image", "audio"],
+                    "description": "素材类型，默认 all；成片只在 all/video 时返回",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "每类最多返回多少条（默认 20，最大 50）",
+                },
+            },
+            "required": [],
+        },
+    )
+    icon = "fa-solid fa-photo-film"
+    label = "列出素材"
+    order = 9.0
+    group = _GROUP
+
+    async def execute(self, **kwargs: object) -> str:
+        from composer.store import composer_store
+
+        limit = max(1, min(50, int(_to_float(kwargs.get("limit"), 20))))
+        kind = str(kwargs.get("kind") or "all").lower()
+        if kind not in ("all", "video", "image", "audio"):
+            kind = "all"
+        include_renders = kind in ("all", "video")
+
+        assets = await composer_store.list_assets(None if kind == "all" else kind)
+        projects = await composer_store.list_projects()
+        titles = {str(p["project_id"]): str(p.get("title") or "") for p in projects}
+
+        media_assets: list[dict[str, object]] = []
+        for asset in assets[:limit]:
+            asset_id = str(asset["asset_id"])
+            probe = asset.get("probe")
+            duration = None
+            if isinstance(probe, dict) and probe.get("duration") is not None:
+                duration = round(_to_float(probe.get("duration")), 3)
+            media_assets.append({
+                "asset_id": asset_id,
+                "kind": str(asset.get("kind") or ""),
+                "name": _asset_name(asset),
+                "duration": duration,
+                "size_bytes": asset.get("size_bytes"),
+                "source": asset.get("source"),
+                "created_at": asset.get("created_at"),
+                "file_url": f"/api/composer/assets/{asset_id}/file",
+            })
+
+        completed: list[dict[str, object]] = []
+        if include_renders:
+            renders = await composer_store.list_renders()
+            completed = [
+                r for r in renders
+                if str(r.get("state")) == RENDER_COMPLETED and r.get("output_path")
+            ]
+        render_items: list[dict[str, object]] = []
+        for render in completed[:limit]:
+            render_id = str(render["render_id"])
+            base = f"/api/composer/renders/{render_id}/file"
+            render_items.append({
+                "render_id": render_id,
+                "project_id": render.get("project_id"),
+                "project_title": titles.get(str(render.get("project_id") or ""), ""),
+                "state": render.get("state"),
+                "finished_at": render.get("finished_at"),
+                "file_url": base,
+                "download_url": f"{base}?download=1",
+            })
+
+        result: dict[str, object] = {
+            "kind": kind,
+            "assets": media_assets,
+            "renders": render_items,
+            "total_assets": len(assets),
+            "total_renders": len(completed),
+            "limit": limit,
+        }
+        if not media_assets and not render_items:
+            result["hint"] = "本机合成器没有匹配的素材或已完成成片。"
+        else:
+            result["hint"] = (
+                "assets 是素材库中的图片/视频/音频（看 kind 字段），renders 是已完成成片；"
+                "file_url 可播放，download_url 可下载。"
+            )
+        return _json(result)
+
+
+def _asset_name(asset: dict[str, object]) -> str:
+    """尽力取素材的可读文件名（meta → URL basename → 本地 basename）。"""
+    meta = asset.get("meta")
+    if isinstance(meta, dict):
+        for key in ("filename", "name", "original_name"):
+            value = meta.get(key)
+            if value:
+                return str(value)
+    url = str(asset.get("url") or "")
+    if url:
+        name = url.split("?", 1)[0].rstrip("/").rsplit("/", 1)[-1]
+        if name:
+            return name
+    file_path = str(asset.get("file_path") or "")
+    return file_path.rsplit("/", 1)[-1] if file_path else str(asset.get("asset_id") or "")
+
+
 class ComposerRenderStatusTool(Tool):
     definition = ToolDefinition(
         name="composer_render_status",
-        description="查询渲染任务状态与进度（渲染中调用不阻塞）。",
+        description=(
+            "查询渲染任务状态与进度（渲染中调用不阻塞）；"
+            "完成时返回 file_url / download_url，可直接作为成品视频播放/下载地址。"
+        ),
         parameters={
             "type": "object",
             "properties": {
@@ -570,18 +691,25 @@ class ComposerRenderStatusTool(Tool):
         live = render_queue.live_snapshot(render_id)
         if live:
             render.update(live)
-        return _json({
+        output_ready = render["state"] == RENDER_COMPLETED and bool(render.get("output_path"))
+        result: dict[str, object] = {
             "render_id": render_id,
             "project_id": render["project_id"],
             "state": render["state"],
             "progress": round(_to_float(render.get("progress")), 3),
             "stage_detail": render.get("stage_detail") or {},
             "error": render.get("error") or "",
-            "output_ready": render["state"] == RENDER_COMPLETED,
-        })
+            "output_ready": output_ready,
+        }
+        if output_ready:
+            base = f"/api/composer/renders/{render_id}/file"
+            result["file_url"] = base
+            result["download_url"] = f"{base}?download=1"
+        return _json(result)
 
 
 COMPOSER_TOOLS: list[Tool] = [
+    ComposerListVideosTool(),
     ComposerCreateProjectTool(),
     ComposerImportAssetTool(),
     ComposerImportGeneratedTool(),
