@@ -14,18 +14,19 @@
 脚本与权重分离（权重不进仓库）：
 
 ```
-E:\NT\IrisFlow-video\deploy\        # 脚本（git 管理，轻量）
-E:\NT\IrisFlow-sidecars\            # ← 默认 SIDECAR_HOME（本机私有，数 GB）
-├── python310\                      # CPython 3.10.11（华为镜像安装包，两个 sidecar 共用）
+<repo>\deploy\                      # setup / serve / start_sidecars 脚本（git 管理，轻量）
+<SIDECAR_HOME>\                     # 默认 <repo 上一级>\IrisFlow-sidecars（与仓库同级，不在仓库内；不存在时自动创建；数 GB）
+├── python-3.10.11-amd64.exe        # setup 下载的 Python 安装包（安装后可删）
+├── python310\                      # Python 3.10.11 安装目录（两个 sidecar 共用）
 ├── .uv-cache\                      # uv wheel 缓存（两个 sidecar 共享，torch 只存一份）
 ├── cosyvoice\
-│   ├── .venv\                      # Python 3.10 + torch cu128 + 依赖
-│   ├── repo\                       # CosyVoice 源码
-│   ├── models\CosyVoice2-0.5B\
-│   └── voices\                     # 提示音色 wav（3-10s，default.wav）
+│   ├── .venv\                      # Python 3.10 venv（setup 创建）
+│   ├── repo\                       # CosyVoice 源码（Gitee 克隆）
+│   ├── models\CosyVoice2-0.5B\     # 权重（ModelScope 下载）
+│   └── voices\                     # 提示音色 wav（setup 复制 default.wav）
 └── stable-audio\
-    ├── .venv\
-    └── models\stable-audio-open-small\
+    ├── .venv\                      # Python 3.10 venv（setup 创建）
+    └── models\stable-audio-open-small\  # 权重（ModelScope / HuggingFace）
 ```
 
 > **下载一次 / 磁盘一份**：`setup.ps1` 默认设置 `UV_CACHE_DIR=<SIDECAR_HOME>\.uv-cache` 和
@@ -33,29 +34,73 @@ E:\NT\IrisFlow-sidecars\            # ← 默认 SIDECAR_HOME（本机私有，�
 > 硬链接（缓存与 venv 同在 SIDECAR_HOME 所在盘）。若该盘不支持硬链接，去掉 `UV_LINK_MODE`
 > 即退回复制（多占约 5-7 GB）。
 
-> uv 下载的 Python 3.10 解释器在用户缓存（`%LOCALAPPDATA%\uv\python`，约 80 MB）。
+> 默认情况下 `setup.ps1` 会在仓库的上一级创建/复用 `IrisFlow-sidecars`；设置 `SIDECAR_HOME` 可改到其他盘。
+> Python 3.10 解释器、wheel 缓存、模型权重和 venv 都在 `SIDECAR_HOME` 下；setup 不会把模型装进系统 Python 或仓库目录。
 
-换盘或换目录时用环境变量覆盖：
+换盘或换目录时用环境变量覆盖（**setup、serve、start_sidecars 要使用同一个值**）：
 
 ```powershell
+#例如
 $env:SIDECAR_HOME = "D:\models\IrisFlow-sidecars"
 ```
 
-## 磁盘占用（2026-11-22 实测，两个 GPU sidecar）
-
-| 组件 | 实测 |
-|---|---|
-| `python310\`（两个 sidecar 共用） | ~0.1 GB |
-| `cosyvoice\.venv`（torch 2.9.1+cu128） | 5.1 GB |
-| `cosyvoice\models\CosyVoice2-0.5B` | 5.3 GB（仓库含多个 checkpoint） |
-| `cosyvoice\repo` | ~0.05 GB |
-| `stable-audio\.venv`（torch 2.7.1+cu128 + stable-audio-tools） | 5.7 GB |
-| `stable-audio\models\stable-audio-open-small` | 1.6 GB |
-| `.uv-cache` + 其他 | ~2.3 GB |
-| **合计** | **≈ 20 GB** |
-
 > 两个 venv 的 torch 版本不同（2.9.1 / 2.7.1），无法硬链接共享，各占一份 CUDA 运行库。
 > 零安装方案（edge-tts 旁白 + 上传 BGM）仍然可用，不占额外磁盘。
+
+## 下载 / 安装位置（setup.ps1）
+
+| 内容 | 默认位置 | 说明 |
+|---|---|---|
+| Python 3.10.11 安装包 | `<SIDECAR_HOME>\python-3.10.11-amd64.exe` | 下载后静默安装到 `<SIDECAR_HOME>\python310`；安装完可删安装包 |
+| uv wheel 缓存 | `<SIDECAR_HOME>\.uv-cache` | `UV_CACHE_DIR`；两个 venv 共享 |
+| CosyVoice venv | `<SIDECAR_HOME>\cosyvoice\.venv` | setup 创建；启动器使用其中的 `Scripts\python.exe` |
+| CosyVoice 源码 | `<SIDECAR_HOME>\cosyvoice\repo` | `git clone` Gitee 镜像；`COSYVOICE_REPO` 可覆盖 |
+| CosyVoice 权重 | `<SIDECAR_HOME>\cosyvoice\models\CosyVoice2-0.5B` | ModelScope `iic/CosyVoice2-0.5B` |
+| CosyVoice 提示音色 | `<SIDECAR_HOME>\cosyvoice\voices` | setup 从 `repo\asset\zero_shot_prompt.wav` 复制为 `default.wav`；也可放 3–10s 自定义 wav |
+| Stable Audio venv | `<SIDECAR_HOME>\stable-audio\.venv` | setup 创建 |
+| Stable Audio 权重 | `<SIDECAR_HOME>\stable-audio\models\stable-audio-open-small` | 有 `HF_TOKEN` 时走 HuggingFace（只下 `model.safetensors` / `model_config.json` 等），否则走 ModelScope |
+
+> setup / serve / start_sidecars 脚本本身在 `<repo>\deploy\...`，不随模型下载；模型文件和 venv 都不进仓库。
+
+## 启动路径要求
+
+**启动器 `start_sidecars.py` 只按固定布局找 venv 和 serve.py**：
+
+| 启动对象 | 必需路径 |
+|---|---|
+| CosyVoice | `<SIDECAR_HOME>\cosyvoice\.venv\Scripts\python.exe` + `<repo>\deploy\cosyvoice\serve.py` |
+| Stable Audio | `<SIDECAR_HOME>\stable-audio\.venv\Scripts\python.exe` + `<repo>\deploy\stable-audio\serve.py` |
+
+- 启动器默认 `SIDECAR_HOME = <repo 上一级>\IrisFlow-sidecars`；安装到别处时，启动前设置 `$env:SIDECAR_HOME = "<实际路径>"`。启动器会把它和端口传给子进程。
+- 目录名 `cosyvoice` / `stable-audio` 及各自 `.venv` 不要随意改名；启动器没有单独的 venv 路径参数。
+- 手动 `serve.ps1` 同样从 `SIDECAR_HOME` 下的 venv 启动 `serve.py`；默认值按脚本自身位置推算，换盘后要设 `SIDECAR_HOME`。
+
+**`serve.py` 的模型/音色路径**：
+
+| Sidecar | 内容 | 默认路径 | 覆盖变量 |
+|---|---|---|---|
+| CosyVoice | 权重 | `<SIDECAR_HOME>\cosyvoice\models\CosyVoice2-0.5B` | `COSYVOICE_MODEL_DIR` |
+| CosyVoice | 提示音色 | `<SIDECAR_HOME>\cosyvoice\voices` | `COSYVOICE_VOICES_DIR` |
+| CosyVoice | 源码 | `<SIDECAR_HOME>\cosyvoice\repo` | `COSYVOICE_REPO_DIR` |
+| CosyVoice | 端口 | 9701 | `COSYVOICE_PORT` |
+| Stable Audio | 权重 | `<SIDECAR_HOME>\stable-audio\models\stable-audio-open-small` | `STABLE_AUDIO_MODEL_DIR` |
+| Stable Audio | 端口 | 9702 | `STABLE_AUDIO_PORT` |
+
+- 端口必须和 `backend/data/composer_config.json` 的 `tts.base_url` / `music.base_url` 一致（默认 9701/9702）；改端口时两边都改，否则后端会显示 `reachable: false`。
+- 只移动权重或音色、保留 venv 时，设置对应 `COSYVOICE_*` / `STABLE_AUDIO_*` 环境变量即可；启动器会继承这些变量。
+- `/health` 只验证 HTTP 服务，不加载模型，也不检查权重/音色目录。路径不对时服务仍可能显示 healthy，但第一次 TTS/BGM 请求会报错；错误会写入 `logs/sidecars/*.log`，可通过 `GET /api/composer/sidecars` 查看。
+
+**常见路径错误**：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 启动器提示 `venv Python 不存在` | `SIDECAR_HOME` 不对或未安装 | 设对 `SIDECAR_HOME`，或重新运行对应的 `setup.ps1` |
+| CosyVoice 请求返回 `缺少提示音色: ...voices\default.wav` | voices 目录/文件缺失 | 放入 3–10s wav 到 `<SIDECAR_HOME>\cosyvoice\voices\default.wav`，或对应音色名 |
+| `No module named 'cosyvoice'` | repo 目录缺失或路径不对 | 重新 setup，或设 `COSYVOICE_REPO_DIR` |
+| CosyVoice 模型加载失败 | 权重目录不对 | 设 `COSYVOICE_MODEL_DIR`，或重新 setup |
+| Stable Audio 报 `model_config.json` 不存在 | 权重目录不对 | 设 `STABLE_AUDIO_MODEL_DIR`，或重新 setup |
+| 端口已被占用 | 已有一个 sidecar 或其他进程 | 停止重复进程，或改端口并同步后端 base_url |
+| 后端 `reachable: false` | 服务未启动/端口或 base_url 不一致 | 查 `/health`、日志与 `composer_config.json` |
 
 ## 国内源（setup.ps1 默认启用）
 
@@ -69,7 +114,7 @@ $env:SIDECAR_HOME = "D:\models\IrisFlow-sidecars"
 | CosyVoice 源码 | **Gitee 镜像** `https://gitee.com/mirrors/CosyVoice.git`（GitHub 直连国内不可用） | `COSYVOICE_REPO` |
 | CosyVoice 权重 | ModelScope（国内直连） | — |
 
-> **CosyVoice 依赖兼容性**（Windows + RTX 50 系实测结论）：
+> **CosyVoice 依赖兼容性**（Windows + RTX 50 系兼容性结论）：
 > - 仓库自带 `requirements.txt` 固定 `torch==2.3.1`（cu121），不支持 Blackwell → 改用裁剪清单，
 >   锁定 `torch==2.9.1+cu128`（SJTU 索引，`--no-deps` 安装，纯 Python 依赖单独装）
 > - `matcha-tts` 的 Cython 扩展需要 MSVC Build Tools，但该扩展仅训练用 → setup 把 matcha
@@ -77,7 +122,7 @@ $env:SIDECAR_HOME = "D:\models\IrisFlow-sidecars"
 > - `openai-whisper` 用 20250625（旧版 20231117 构建失败），走 PyPI
 > - `pyworld`（训练）、`deepspeed`/`tensorrt`（Linux）、`gradio`/`tensorboard`/`lightning`（训练/演示）已排除
 >
-> **Stable Audio 兼容性**（Windows + RTX 50 系实测）：
+> **Stable Audio 兼容性**（Windows + RTX 50 系兼容性）：
 > - `stable-audio-tools` 的依赖会把 torch 降级为 CPU 版 → 安装顺序改为最后用 SJTU 直链覆盖
 >   `torch/torchaudio/torchvision`（2.7.1 / 0.22.1 + cu128）
 > - PyWavelets 1.4.1 与 numpy 2 不兼容 → 升级 ≥1.8；LoRA 回调需要 `pytorch-lightning`
@@ -93,14 +138,13 @@ $env:CUDA_TAG = "cu128"
 
 ## 前置条件
 
-| 项 | 说明 | 当前机器状态 |
-|---|---|---|
-| uv | 安装依赖（uv pip + 硬链接去重） | ✅ 已装 |
-| 本机 Python | 3.10 由脚本从华为镜像下载安装包静默安装到 `<SIDECAR_HOME>\python310`，无需预装 | ✅ 3.13（不影响 sidecar） |
-| 国内 CPython 镜像 | 华为云 `mirrors.huaweicloud.com/python/`（Gitee/GitHub 的 standalone 构建不可达） | ✅ 可用 |
-| NVIDIA 驱动 | RTX 50 系（Blackwell）需 **CUDA 12.8+ 的 torch 轮子** | ✅ 驱动 576.65（满足） |
-| 磁盘 | CosyVoice ~2-4 GB、Stable Audio ~1-2 GB（模型 + venv） | 待确认 |
-| Hugging Face 访问 | Stable Audio 模型需先接受 license 并配置 `HF_TOKEN` | ❌ 未配置 |
+| 项 | 说明 |
+|---|---|
+| uv | 安装依赖（uv pip + 硬链接去重） |
+| 宿主机 Python | 3.10 由脚本从华为镜像下载安装包静默安装到 `<SIDECAR_HOME>\python310`，无需预装 |
+| 国内 CPython 镜像 | 华为云 `mirrors.huaweicloud.com/python/`（Gitee/GitHub 的 standalone 构建不可达） |
+| NVIDIA 驱动 | RTX 50 系（Blackwell）需 **CUDA 12.8+ 的 torch 轮子** |
+| 磁盘 | 预留约 20 GB（两个 venv + 权重） |
 
 > **RTX 50 系注意**：Blackwell（sm_120）只能用 `cu128` 及以上的 torch（≥ 2.7）。
 > `setup.ps1` 已默认 `CUDA_TAG=cu128`；老显卡可 `$env:CUDA_TAG="cu124"`。
@@ -111,7 +155,7 @@ $env:CUDA_TAG = "cu128"
 ## 部署步骤（Windows PowerShell）
 
 ```powershell
-# 1. 语音（需要 NVIDIA GPU + CUDA；RTX 5060 8GB 可跑 CosyVoice2-0.5B）
+# 1. 语音（需要 NVIDIA GPU + CUDA；8–12 GB 显存可跑 CosyVoice2-0.5B）
 cd deploy\cosyvoice
 .\setup.ps1
 
@@ -191,7 +235,7 @@ GET  {music.base_url 去掉 /v1}/health
 ```
 
 ACE-Step（3.5B，GPU 8-12 GB）部署后把 `music.base_url` 指向其适配服务即可生成完整主题曲；
-RTX 5060 8 GB 属于踩线配置，可能需要量化或降档。
+8 GB 显存属于踩线配置，可能需要量化或降档。
 
 ## 配置云端 TTS（可选，无 GPU 时推荐）
 

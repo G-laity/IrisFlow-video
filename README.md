@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/许可证-Apache_2.0-blue)]()
 [![Status](https://img.shields.io/badge/状态-开发中-yellow)]()
-[![Version](https://img.shields.io/badge/版本-0.43.0-green)]()
+[![Version](https://img.shields.io/badge/版本-0.43.1-green)]()
 [![Python](https://img.shields.io/badge/Python-3.14-blue)]()
 
 **IrisFlow** 是一个 LLM Chat + Agent 控制台。后端基于 FastAPI 提供 OpenAI-compatible 网关，前端基于 Vite + Vue 3 提供聊天面板。支持流式对话（SSE）、Agent 工具调用推理循环、MCP 外部工具集成（浏览器自动化 / GitHub / 图像视频生成）、会话持久化与多格式文件上传。
@@ -192,7 +192,7 @@ curl "http://localhost:8000/api/composer/sidecars?lines=200"
 ```bash
 # 测试后端根接口
 curl http://localhost:8000/
-# → {"name":"IrisFlow","version":"0.43.0",...}
+# → {"name":"IrisFlow","version":"0.43.1",...}
 
 # 测试健康检查
 curl http://localhost:8000/api/health
@@ -294,7 +294,7 @@ IrisFlow/
 │   │       │   ├── SettingsPanel.vue     #     设置面板 — 服务器/LLM/MCP/密钥/默认参数/关于 + 全量配置持久化
 │   │       │   ├── ToolGroupPanel.vue    #     工具管理浮窗 — MCP 服务器工具组开关
 │   │       │   ├── WorkflowDetail.vue    #     工作流详情 — 工具调用 / 结果 / 思考过程查看
-│   │       │   ├── ComposerPanel.vue     #     合成器主浮窗 — 素材库标签页（M1）+ 项目/时间轴/渲染占位
+│   │       │   ├── ComposerPanel.vue     #     合成器主浮窗 — 素材 / 项目 / 时间轴 / 渲染标签页
 │   │       │   └── MediaPreview.vue      #     统一媒体预览 — 图片/视频/网页 + 文件 Markdown 渲染
 │   │       ├── composer/         #     合成器子组件
 │   │       │   ├── AssetLibrary.vue      #     素材库 — 网格 + 过滤 + 上传/导入 + TTS/BGM 快捷生成
@@ -381,20 +381,6 @@ graph TD
 4. 前端实时展示工作流日志（思考 → 工具调用 → 结果 → 最终回复）。
 5. 对话超出上下文预算时自动压缩（工具结果截断 + 旧轮丢弃），历史完整保留。
 6. 会话自动保存到 SQLite，重启后完整恢复。
-
-## 🗺️ 下一步计划
-
-### 🎬 视频合成器（IRIS VIDEO COMPOSER）
-
-将 IrisFlow 生成的各类媒体素材整合为完整视频（规划详见 [PLAN.md](./PLAN.md)）：
-
-- ✅ **M1 · 素材管线（0.34.0）**：素材库落地——URL 导入 / 本地上传（500 MB、仅媒体类型）、sha256 去重、ffprobe 元数据探测、hash 分桶存储、引用计数删除、合成器浮窗（网格缩略图 + 类型过滤）、SSE 实时推送、ffmpeg 启动探测与可配置路径
-- ✅ **M2 · 时间轴 + 编排 + 语音/音乐生成（0.35.0）**：时间轴 Schema 校验 + SRT 生成、项目 CRUD 与引用计数、Agent 八工具集（项目 / 素材导入 / Agnes 轮询入库 / TTS / BGM / 时间轴 / 渲染占位）、TTS 三级降级（CosyVoice sidecar → 云端 → edge-tts）、Stable Audio BGM、分镜编辑器（镜头 / 字幕 / 旁白 / BGM，PATCH 即存）、素材页 TTS/BGM 快捷生成、本地模型 sidecar 部署脚本（deploy/）
-- ✅ **M3 · 渲染 MVP（0.36.0）**：分段渲染 + concat 拼接 + SRT 字幕烧录 + 旁白/BGM 混音、渲染队列与状态机、SSE 实时进度、取消（杀进程）、成品 MP4 预览/下载、磁盘水位告警、重启中断恢复
-- ✅ **M4 · 高级合成（0.37.0）**：xfade 转场（fade / dissolve / slide）、Ken Burns 运镜（zoom + pan）、ASS 样式字幕（默认 / 大字 / 顶部 / 简约）、旁白侧链压 BGM、TTS 长文本自动分句与多说话人对话、编码参数可配置（preset / crf / 码率）
-- ✅ **M5 · 体验完善（0.38.0，GA）**：轨道式时间轴（标尺 / 播放头预览 / 拖拽重排）、项目模板（产品介绍 / 口播 / 图文混排）、磁盘 LRU 回收（手动 + 水位自动）、对话工具结果「发送到合成器」、渲染完成 toast
-
-> 🎉 **IRIS VIDEO COMPOSER 五个里程碑（M1-M5）全部完成，特性标记 GA（0.38.0）**。
 
 ## 📄 许可证
 

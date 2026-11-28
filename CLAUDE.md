@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-IrisFlow v0.43.0 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃（纯折射 + 软→正式透镜淡入）与开始页已完成；合成器动效与 sidecar 启动器已落地；当前活跃 backlog 为 A1 二阶动力学。
+IrisFlow v0.43.1 — LLM Chat + Agent 控制台。后端 FastAPI + OpenAI-compatible 网关，前端 Vite + Vue 3。Composer M1-M5 已 GA；前端优化 P0-P3、卡片玻璃（纯折射 + 软→正式透镜淡入）与开始页已完成；合成器动效与 sidecar 启动器已落地；当前活跃 backlog 为 A1 二阶动力学。
 
 ## 命令
 

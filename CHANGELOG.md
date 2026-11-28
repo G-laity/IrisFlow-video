@@ -5,6 +5,12 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，  
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## 0.43.1
+
+### 变更
+- **README**：移除已完成的「下一步计划」章节（M1–M5 清单与 GA 说明），更新 `ComposerPanel.vue` 的结构说明
+- **deploy/README.md**：移除本机状态（当前机器状态列、实测磁盘表、HF 访问状态等）；补充 setup.ps1 的下载/安装位置（`SIDECAR_HOME`、venv、源码、权重、音色、uv 缓存）、启动路径要求（启动器/serve.py/端口/base_url）、默认 `SIDECAR_HOME` 与常见路径错误
+
 ## 0.43.0
 
 ### 添加
