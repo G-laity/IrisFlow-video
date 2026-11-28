@@ -21,6 +21,7 @@ import {
   startComposerEvents,
   stopComposerEvents,
 } from "../../composables/useComposer";
+import { useTabIndicator } from "../../composables/useTabIndicator";
 import type { PreviewPayload } from "../../types/api";
 import type { MorphRect } from "../../utils/fluidMorph";
 
@@ -39,6 +40,7 @@ const emit = defineEmits<{
 // M3：四个标签页全部启用。
 
 const activeTab = ref(UI_TAB_ASSETS);
+const { navEl, indicatorEl, indicatorStyle } = useTabIndicator(activeTab, ".cp-tab.on");
 
 const TABS = [
   { key: UI_TAB_ASSETS, icon: "fa-solid fa-photo-film", available: true },
@@ -78,7 +80,8 @@ onUnmounted(() => {
   >
     <div class="cp-body">
       <!-- 标签页 -->
-      <div class="cp-tabs">
+      <div ref="navEl" class="cp-tabs">
+        <span ref="indicatorEl" class="cp-tab-indicator" :style="indicatorStyle" aria-hidden="true"></span>
         <button
           v-for="tab in TABS"
           :key="tab.key"
@@ -94,14 +97,18 @@ onUnmounted(() => {
       </div>
 
       <div class="cp-content">
-        <AssetLibrary v-if="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
-        <ProjectList v-else-if="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
-        <StoryboardEditor v-else-if="activeTab === UI_TAB_TIMELINE" />
-        <RenderQueue
-          v-else-if="activeTab === UI_TAB_RENDERS"
-          :project-id="activeProjectId || undefined"
-          @preview="payload => emit('preview', payload)"
-        />
+        <Transition name="cp-switch">
+          <div :key="activeTab" class="cp-tab-body">
+            <AssetLibrary v-if="activeTab === UI_TAB_ASSETS" @preview="payload => emit('preview', payload)" />
+            <ProjectList v-else-if="activeTab === UI_TAB_PROJECTS" @selected="onProjectSelected" />
+            <StoryboardEditor v-else-if="activeTab === UI_TAB_TIMELINE" />
+            <RenderQueue
+              v-else-if="activeTab === UI_TAB_RENDERS"
+              :project-id="activeProjectId || undefined"
+              @preview="payload => emit('preview', payload)"
+            />
+          </div>
+        </Transition>
       </div>
     </div>
   </FloatingWindow>
@@ -126,6 +133,8 @@ onUnmounted(() => {
 }
 
 .cp-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -136,15 +145,51 @@ onUnmounted(() => {
   color: var(--text-dim);
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s;
 }
 .cp-tab:hover { color: var(--text-secondary); }
-.cp-tab.on { color: var(--accent); border-bottom-color: var(--accent); }
+.cp-tab.on { color: var(--accent); border-bottom-color: transparent; }
 .cp-tab:disabled { color: var(--text-dim); opacity: 0.45; cursor: not-allowed; }
+
+/* 选中框：与设置面板同款滑动指示器 */
+.cp-tab-indicator {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 8px 8px 0 0;
+  background: var(--accent-bg-mid);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  transition:
+    top 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    left 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    width 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    height 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.15s ease;
+}
+.cp-tab-indicator.no-anim { transition: none !important; }
 
 /* 素材库滚动区（由 FloatingWindow 的 fw-body 统一滚动） */
 .cp-content {
+  position: relative;
   flex: 1;
   min-height: 0;
+}
+
+.cp-tab-body { min-height: 0; }
+
+/* 标签切换：新内容淡入上移，旧内容绝对定位淡出，避免高度先塌陷 */
+.cp-switch-enter-active { transition: opacity 0.18s ease, transform 0.18s ease; }
+.cp-switch-leave-active {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease;
+}
+.cp-switch-enter-from { opacity: 0; transform: translateX(8px); }
+.cp-switch-leave-to { opacity: 0; transform: translateX(-8px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cp-switch-enter-active,
+  .cp-switch-leave-active { transition: none; }
 }
 </style>

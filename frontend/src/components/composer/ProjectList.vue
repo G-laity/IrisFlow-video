@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { listComposerTemplates, updateComposerProject } from "../../api/client";
 import {
+  UI_PROJECT_CREATE,
   UI_PROJECT_DELETE_CONFIRM,
   UI_PROJECT_NEW,
   UI_PROJECT_NO_PROJECTS,
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 const title = ref("");
 const script = ref("");
 const creating = ref(false);
+const createOpen = ref(false);
 const error = ref("");
 const templates = ref<ComposerProjectTemplate[]>([]);
 const templateId = ref("");
@@ -75,6 +77,7 @@ async function handleCreate(): Promise<void> {
     title.value = "";
     script.value = "";
     templateId.value = "";
+    createOpen.value = false;
     emit("selected", project.project_id);
   } catch (e) {
     error.value = parseComposerError(e).join("\n");
@@ -95,18 +98,29 @@ async function handleDelete(projectId: string): Promise<void> {
 
 <template>
   <div class="pl-body">
-    <!-- 新建 -->
-    <div class="pl-create">
-      <select v-model="templateId" class="pl-input" @change="onTemplateChange">
-        <option value="">{{ UI_TEMPLATE_LABEL }} · {{ UI_TEMPLATE_NONE }}</option>
-        <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.name }}</option>
-      </select>
-      <input v-model="title" class="pl-input" :placeholder="UI_PROJECT_TITLE_PLACEHOLDER" @keydown.enter="handleCreate" />
-      <textarea v-model="script" class="pl-textarea" rows="2" :placeholder="UI_PROJECT_SCRIPT_PLACEHOLDER" />
-      <button class="pl-btn pl-btn--primary" :disabled="creating || !title.trim()" @click="handleCreate">
+    <!-- 新建（可折叠，平滑展开） -->
+    <div class="pl-create-block">
+      <button class="pl-create-head" :aria-expanded="createOpen" @click="createOpen = !createOpen">
         <i class="fa-solid fa-plus"></i>
         {{ UI_PROJECT_NEW }}
+        <i class="fa-solid fa-chevron-down pl-chevron" :class="{ 'is-open': createOpen }"></i>
       </button>
+      <div class="pl-collapse" :class="{ open: createOpen }" :inert="!createOpen">
+        <div class="pl-collapse-inner">
+          <div class="pl-create">
+            <select v-model="templateId" class="pl-input" @change="onTemplateChange">
+              <option value="">{{ UI_TEMPLATE_LABEL }} · {{ UI_TEMPLATE_NONE }}</option>
+              <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+            </select>
+            <input v-model="title" class="pl-input" :placeholder="UI_PROJECT_TITLE_PLACEHOLDER" @keydown.enter="handleCreate" />
+            <textarea v-model="script" class="pl-textarea" rows="2" :placeholder="UI_PROJECT_SCRIPT_PLACEHOLDER" />
+            <button class="pl-btn pl-btn--primary" :disabled="creating || !title.trim()" @click="handleCreate">
+              <i class="fa-solid fa-plus"></i>
+              {{ UI_PROJECT_CREATE }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
     <p v-if="error" class="pl-error">{{ error }}</p>
 
@@ -146,6 +160,46 @@ async function handleDelete(projectId: string): Promise<void> {
   flex-direction: column;
   gap: 12px;
 }
+
+.pl-create-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pl-create-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 2px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.pl-create-head:hover { color: var(--text-primary); }
+.pl-chevron {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pl-chevron.is-open { transform: rotate(180deg); }
+
+/* 平滑展开：0fr → 1fr 网格行高，无需测量内容高度 */
+.pl-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+.pl-collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.pl-collapse-inner { min-height: 0; overflow: hidden; }
 
 .pl-create {
   display: flex;

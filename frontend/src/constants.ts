@@ -218,7 +218,7 @@ export const UI_LANDING_TITLE = "让想法开始流动";
 export const UI_LANDING_SUBTITLE = "LLM Chat + Agent · 模型、工具与视频合成器，从一个问题开始。";
 export const UI_LANDING_PLACEHOLDER = "问点什么，一起探索";
 export const UI_LANDING_HINT = "Enter 发送 · Shift + Enter 换行";
-export const UI_LANDING_UPDATE = "IrisFlow v0.41 · 卡片玻璃与透镜折射已上线";
+export const UI_LANDING_UPDATE = "IrisFlow v0.43 · 玻璃与合成器动效已上线";
 export const UI_LANDING_PROMPTS = [
   "帮我总结这段文字",
   "让 Agent 调用工具查资料",
@@ -414,6 +414,7 @@ export const UI_COMPOSER_FFMPEG_MISSING = "未检测到 ffmpeg，探测元数据
 
 export const COMPOSER_PROJECT_SAVE_DELAY = 600;   // 时间轴编辑保存防抖（ms）
 export const UI_PROJECT_NEW = "新建项目";
+export const UI_PROJECT_CREATE = "创建项目";
 export const UI_PROJECT_TITLE_PLACEHOLDER = "项目标题";
 export const UI_PROJECT_SCRIPT_PLACEHOLDER = "分镜脚本（可选）…";
 export const UI_PROJECT_NO_PROJECTS = "暂无项目";

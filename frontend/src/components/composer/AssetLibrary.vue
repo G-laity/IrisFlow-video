@@ -266,48 +266,60 @@ function probeSummary(asset: ComposerAsset): string {
 
     <!-- TTS / BGM 快捷生成 -->
     <div class="al-gen">
-      <button class="al-gen-head" @click="ttsOpen = !ttsOpen">
-        <i class="fa-solid fa-microphone"></i>
-        {{ UI_TTS_PANEL }}
-        <i class="fa-solid al-gen-chevron" :class="ttsOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-      </button>
-      <div v-if="ttsOpen" class="al-gen-body">
-        <textarea v-model="ttsText" class="al-gen-textarea" rows="2" :placeholder="UI_TTS_TEXT_PLACEHOLDER" />
-        <div class="al-gen-row">
-          <label class="al-gen-voice">
-            <span>{{ UI_TTS_VOICE }}</span>
-            <select v-model="ttsVoice">
-              <option value="">{{ composerTtsDefaultVoice || "默认" }}</option>
-              <option v-for="v in composerTtsVoices" :key="v" :value="v">{{ v }}</option>
-            </select>
-          </label>
-          <button class="al-btn al-btn--primary" :disabled="ttsBusy || !ttsText.trim()" @click="handleTts">
-            <i v-if="ttsBusy" class="fa-solid fa-spinner fa-spin"></i>
-            {{ ttsBusy ? UI_GENERATING : UI_TTS_GENERATE }}
-          </button>
+      <div class="al-gen-item">
+        <button class="al-gen-head" :aria-expanded="ttsOpen" @click="ttsOpen = !ttsOpen">
+          <i class="fa-solid fa-microphone"></i>
+          {{ UI_TTS_PANEL }}
+          <i class="fa-solid fa-chevron-down al-gen-chevron" :class="{ 'is-open': ttsOpen }"></i>
+        </button>
+        <div class="al-gen-collapse" :class="{ open: ttsOpen }" :inert="!ttsOpen">
+          <div class="al-gen-collapse-inner">
+            <div class="al-gen-body">
+              <textarea v-model="ttsText" class="al-gen-textarea" rows="2" :placeholder="UI_TTS_TEXT_PLACEHOLDER" />
+              <div class="al-gen-row">
+                <label class="al-gen-voice">
+                  <span>{{ UI_TTS_VOICE }}</span>
+                  <select v-model="ttsVoice">
+                    <option value="">{{ composerTtsDefaultVoice || "默认" }}</option>
+                    <option v-for="v in composerTtsVoices" :key="v" :value="v">{{ v }}</option>
+                  </select>
+                </label>
+                <button class="al-btn al-btn--primary" :disabled="ttsBusy || !ttsText.trim()" @click="handleTts">
+                  <i v-if="ttsBusy" class="fa-solid fa-spinner fa-spin"></i>
+                  {{ ttsBusy ? UI_GENERATING : UI_TTS_GENERATE }}
+                </button>
+              </div>
+              <label class="al-check">
+                <input v-model="ttsSplit" type="checkbox" />
+                {{ UI_TTS_SPLIT }}
+              </label>
+            </div>
+          </div>
         </div>
-        <label class="al-check">
-          <input v-model="ttsSplit" type="checkbox" />
-          {{ UI_TTS_SPLIT }}
-        </label>
       </div>
 
-      <button class="al-gen-head" @click="bgmOpen = !bgmOpen">
-        <i class="fa-solid fa-music"></i>
-        {{ UI_BGM_PANEL }}
-        <i class="fa-solid al-gen-chevron" :class="bgmOpen ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-      </button>
-      <div v-if="bgmOpen" class="al-gen-body">
-        <input v-model="bgmStyle" class="al-url-input al-gen-style" :placeholder="UI_BGM_STYLE_PLACEHOLDER" @keydown.enter="handleBgm" />
-        <div class="al-gen-row">
-          <label class="al-gen-voice">
-            <span>时长（秒）</span>
-            <input v-model.number="bgmDuration" type="number" min="1" max="60" />
-          </label>
-          <button class="al-btn al-btn--primary" :disabled="bgmBusy || !bgmStyle.trim()" @click="handleBgm">
-            <i v-if="bgmBusy" class="fa-solid fa-spinner fa-spin"></i>
-            {{ bgmBusy ? UI_GENERATING : UI_BGM_GENERATE }}
-          </button>
+      <div class="al-gen-item">
+        <button class="al-gen-head" :aria-expanded="bgmOpen" @click="bgmOpen = !bgmOpen">
+          <i class="fa-solid fa-music"></i>
+          {{ UI_BGM_PANEL }}
+          <i class="fa-solid fa-chevron-down al-gen-chevron" :class="{ 'is-open': bgmOpen }"></i>
+        </button>
+        <div class="al-gen-collapse" :class="{ open: bgmOpen }" :inert="!bgmOpen">
+          <div class="al-gen-collapse-inner">
+            <div class="al-gen-body">
+              <input v-model="bgmStyle" class="al-url-input al-gen-style" :placeholder="UI_BGM_STYLE_PLACEHOLDER" @keydown.enter="handleBgm" />
+              <div class="al-gen-row">
+                <label class="al-gen-voice">
+                  <span>时长（秒）</span>
+                  <input v-model.number="bgmDuration" type="number" min="1" max="60" />
+                </label>
+                <button class="al-btn al-btn--primary" :disabled="bgmBusy || !bgmStyle.trim()" @click="handleBgm">
+                  <i v-if="bgmBusy" class="fa-solid fa-spinner fa-spin"></i>
+                  {{ bgmBusy ? UI_GENERATING : UI_BGM_GENERATE }}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -461,7 +473,27 @@ function probeSummary(asset: ComposerAsset): string {
   text-align: left;
 }
 .al-gen-head:hover { color: var(--text-primary); }
-.al-gen-chevron { margin-left: auto; font-size: 10px; color: var(--text-dim); }
+.al-gen-chevron {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-dim);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.al-gen-chevron.is-open { transform: rotate(180deg); }
+
+.al-gen-item { display: flex; flex-direction: column; }
+
+/* 平滑展开：0fr → 1fr 的网格行高动画，无需测量内容高度 */
+.al-gen-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+}
+.al-gen-collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.al-gen-collapse-inner { min-height: 0; overflow: hidden; }
 
 .al-gen-body {
   display: flex;

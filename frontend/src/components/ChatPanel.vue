@@ -38,6 +38,7 @@ import {
   UI_WELCOME_TITLE,
 } from "../constants";
 import { draftStore } from "../composables/drafts";
+import type { MorphRect } from "../utils/fluidMorph";
 
 const props = defineProps<{
   model: string;
@@ -46,10 +47,19 @@ const props = defineProps<{
 const emit = defineEmits<{
   selectEntry: [entry: WorkflowEntry | null];
   preview: [payload: PreviewPayload];
-  openConversations: [];
-  openComposer: [];
-  openSettings: [];
+  openConversations: [origin?: MorphRect];
+  openComposer: [origin?: MorphRect];
+  openSettings: [origin?: MorphRect];
 }>();
+
+/** 把入口按钮的视口矩形交给 App，用作浮窗流体展开的起点 */
+function rectOf(e: MouseEvent): MorphRect | undefined {
+  const el = e.currentTarget as HTMLElement | null;
+  if (!el) return undefined;
+  const r = el.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return undefined;
+  return { left: r.left, top: r.top, width: r.width, height: r.height };
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -339,13 +349,13 @@ defineExpose({
           <span class="landing-wordmark">IrisFlow</span>
         </div>
         <nav class="landing-nav" aria-label="快捷入口">
-          <button type="button" @click="emit('openConversations')">
+          <button type="button" @click="emit('openConversations', rectOf($event))">
             <i class="fa-solid fa-clock-rotate-left"></i><span>{{ UI_SESSION_LIST }}</span>
           </button>
-          <button type="button" @click="emit('openComposer')">
+          <button type="button" @click="emit('openComposer', rectOf($event))">
             <i class="fa-solid fa-clapperboard"></i><span>{{ UI_COMPOSER }}</span>
           </button>
-          <button type="button" @click="emit('openSettings')">
+          <button type="button" @click="emit('openSettings', rectOf($event))">
             <i class="fa-solid fa-gear"></i><span>{{ UI_SETTINGS }}</span>
           </button>
         </nav>

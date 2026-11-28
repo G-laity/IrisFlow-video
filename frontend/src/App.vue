@@ -42,6 +42,7 @@ const conversationOrigin = ref<MorphRect | null>(null);
 function captureRect(el: HTMLElement | null): MorphRect | null {
   if (!el) return null;
   const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return null;
   return {
     left: rect.left,
     top: rect.top,
@@ -50,13 +51,17 @@ function captureRect(el: HTMLElement | null): MorphRect | null {
   };
 }
 
-function openSettings() {
-  settingsOrigin.value = captureRect(settingsBtnEl.value);
+function captureEventRect(e: MouseEvent): MorphRect | null {
+  return captureRect(e.currentTarget as HTMLElement | null);
+}
+
+function openSettings(origin?: MorphRect | null) {
+  settingsOrigin.value = origin ?? captureRect(settingsBtnEl.value);
   showSettings.value = true;
 }
 
-function openComposer() {
-  composerOrigin.value = captureRect(composerBtnEl.value);
+function openComposer(origin?: MorphRect | null) {
+  composerOrigin.value = origin ?? captureRect(composerBtnEl.value);
   showComposer.value = true;
 }
 
@@ -64,8 +69,8 @@ function openComposer() {
 
 const showConversationList = ref(route.name !== "new-chat");
 
-function openConversations() {
-  conversationOrigin.value = captureRect(conversationBtnEl.value);
+function openConversations(origin?: MorphRect | null) {
+  conversationOrigin.value = origin ?? captureRect(conversationBtnEl.value);
   showConversationList.value = true;
 }
 
@@ -252,7 +257,7 @@ function handleUpdateSettings(cfg: { model: string }) {
     ref="conversationBtnEl"
     class="floating-toggle floating-toggle--tl floating-toggle--capsule"
     :class="{ 'is-morphed': showConversationList }"
-    @click="openConversations"
+    @click="openConversations()"
     :title="UI_SESSION_LIST"
     :aria-label="UI_SESSION_LIST"
     :aria-expanded="showConversationList"
@@ -268,7 +273,7 @@ function handleUpdateSettings(cfg: { model: string }) {
     ref="composerBtnEl"
     class="floating-toggle floating-toggle--tr2 floating-toggle--capsule"
     :class="{ 'is-morphed': showComposer || showSettings }"
-    @click="openComposer"
+    @click="openComposer()"
     :title="UI_COMPOSER"
     :aria-label="UI_COMPOSER"
     :aria-expanded="showComposer"
@@ -284,7 +289,7 @@ function handleUpdateSettings(cfg: { model: string }) {
     ref="settingsBtnEl"
     class="floating-toggle floating-toggle--tr floating-toggle--capsule"
     :class="{ 'is-morphed': showSettings }"
-    @click="openSettings"
+    @click="openSettings()"
     :title="UI_SETTINGS"
     :aria-label="UI_SETTINGS"
     :aria-expanded="showSettings"
@@ -301,7 +306,7 @@ function handleUpdateSettings(cfg: { model: string }) {
       class="app-toast"
       role="status"
       aria-live="polite"
-      @click="showComposer = true; clearComposerToast()"
+      @click="openComposer(captureEventRect($event)); clearComposerToast()"
     >
       <i class="fa-solid fa-circle-check"></i>
       {{ composerToast }}

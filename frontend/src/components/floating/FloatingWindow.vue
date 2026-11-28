@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, watch, computed, onMounted, onUnmounted, nextTick, useId } from "vue";
 import { UI_CLOSE, UI_PIN, UI_UNPIN } from "../../constants";
 import { register, unregister, focusWindow, setVisible } from "../../composables/windowZIndex";
 import {
@@ -107,6 +107,66 @@ function close() {
 // ── 流体变形（胶囊按钮 → 面板）─────────────────
 
 const morphing = ref(false);
+
+// ── 透镜强度：每个浮窗克隆一份 #glass-lens，用 scale 逐帧淡入/淡出 ──
+// 不用 opacity 做交叉淡入：Chromium 在 opacity < 1 时会跳过 backdrop-filter，
+// 反而让玻璃在过渡期间消失。
+
+const LENS_FADE_IN_MS = 220;
+const LENS_FADE_OUT_MS = 180;
+const lensFilterId = `glass-lens-fw-${useId()}`;
+const lensFilterUrl = ref("url(#glass-lens)");
+
+let _lensClone: SVGFilterElement | null = null;
+let _lensMaps: Element[] = [];
+let _lensBaseScales: number[] = [];
+let _lensFactor = 0;
+let _lensRaf = 0;
+
+function setupLensFilter() {
+  if (_lensMaps.length) return;
+  const src = document.getElementById("glass-lens");
+  if (!src) return;
+  const clone = src.cloneNode(true) as SVGFilterElement;
+  clone.id = lensFilterId;
+  src.parentElement?.append(clone);
+  _lensClone = clone;
+  _lensMaps = [...clone.querySelectorAll("feDisplacementMap")];
+  _lensBaseScales = _lensMaps.map((el) => Number(el.getAttribute("scale")));
+  lensFilterUrl.value = `url(#${lensFilterId})`;
+  setLensFactor(_lensFactor);
+}
+
+function setLensFactor(factor: number) {
+  _lensFactor = factor;
+  for (let i = 0; i < _lensMaps.length; i++) {
+    _lensMaps[i].setAttribute("scale", String(_lensBaseScales[i] * factor));
+  }
+}
+
+function cancelLensRamp() {
+  if (_lensRaf) cancelAnimationFrame(_lensRaf);
+  _lensRaf = 0;
+}
+
+/** 把透镜位移强度从当前值缓动到 to（0=纯模糊，1=完整透镜） */
+function rampLens(to: number, duration: number) {
+  cancelLensRamp();
+  if (!_lensMaps.length || prefersReducedMotion()) {
+    setLensFactor(to);
+    return;
+  }
+  const from = _lensFactor;
+  const started = performance.now();
+  const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
+  const tick = (now: number) => {
+    // rAF 时间戳可能略早于 started，钳到 0 避免第一帧出现负位移
+    const p = Math.min(1, Math.max(0, (now - started) / duration));
+    setLensFactor(from + (to - from) * easeOutCubic(p));
+    _lensRaf = p < 1 ? requestAnimationFrame(tick) : 0;
+  };
+  _lensRaf = requestAnimationFrame(tick);
+}
 let _morphAnims: Animation[] = [];
 let _morphToken = 0;
 let _contentFrozen = false;
@@ -248,6 +308,7 @@ async function playMorphOpen() {
 
   if (!freezeContent(target.left, target.top)) {
     stopMorph();
+    rampLens(1, LENS_FADE_IN_MS);
     return;
   }
 
@@ -286,6 +347,8 @@ async function playMorphOpen() {
       anim.cancel();
       restoreMorphTransform();
       morphing.value = false;
+      // 形变完成后把透镜位移从 0 缓动到满强度，避免突然出现
+      rampLens(1, LENS_FADE_IN_MS);
       _morphAnims = [];
     })
     .catch(() => { /* cancelled */ });
@@ -377,14 +440,25 @@ watch(
       bringToFront();
       const morph = canMorph();
       // 先关掉默认过渡再显示，保证测量到的是 show 的最终几何
-      if (morph) morphing.value = true;
+      if (morph) {
+        // 形变期间透镜强度归零（只有模糊）；结束后 playMorphOpen 再缓动到满强度
+        cancelLensRamp();
+        setLensFactor(0);
+        morphing.value = true;
+      } else {
+        cancelLensRamp();
+        setLensFactor(1);
+      }
       show.value = true;
       await nextTick();
       clampToViewport();
       if (morph) void playMorphOpen();
     } else if (canMorph() && show.value) {
+      // 收起时先把透镜强度缓动到 0，形变期间保持模糊
+      rampLens(0, LENS_FADE_OUT_MS);
       void playMorphClose();
     } else {
+      cancelLensRamp();
       stopMorph();
       show.value = false;
     }
@@ -394,11 +468,14 @@ watch(
 // ── 初始定位（onMounted 时 panelEl 已就绪）────
 
 onMounted(() => {
+  setupLensFilter();
+  if (!_lensMaps.length) requestAnimationFrame(() => setupLensFilter());
   register(myKey, setZ, close);
   if (props.modelValue) setVisible(myKey, true);
   applyPosStyle(panelEl.value!);
   if (props.modelValue) {
     show.value = true;
+    setLensFactor(1);
     bringToFront();
   }
   window.addEventListener("resize", clampToViewport);
@@ -407,6 +484,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopMorph();
+  cancelLensRamp();
+  _lensClone?.remove();
+  _lensClone = null;
+  _lensMaps = [];
   unregister(myKey);
   window.removeEventListener("resize", clampToViewport);
   document.removeEventListener("mousedown", onDocMouseDown);
@@ -517,14 +598,13 @@ function clampToViewport() {
       }"
       :style="{ width, zIndex }"
     >
-      <!-- REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移；内容不在其中 -->
-      <span class="glass-card__warp" aria-hidden="true"></span>
-
-      <!-- TINT：滤镜之上的半透明染色，保证文字对比 -->
-      <span class="glass-card__tint" aria-hidden="true"></span>
-
-      <!-- INNER/OUTER rim + 边缘色散：在玻璃之上、内容之下 -->
-      <span class="glass-card__rim" aria-hidden="true"></span>
+      <!-- REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移；
+           透镜强度由当前实例的滤镜 scale 逐帧控制，内容不在其中。 -->
+      <span
+        class="glass-card__warp"
+        :style="{ filter: lensFilterUrl }"
+        aria-hidden="true"
+      ></span>
 
       <!-- 内容层：变形时冻结为最终尺寸并从右上角被外壳裁切，避免内容重排 -->
       <div ref="contentEl" class="fw-content glass-card__body">
@@ -595,13 +675,9 @@ function clampToViewport() {
   /* 状态 */
   &.fw-panel--show { opacity: 1; pointer-events: auto; translate: 0 0; scale: 1; }
   &.fw-panel--pinned {
-    border-color: var(--accent);
     box-shadow:
       var(--fw-shadow),
-      var(--fw-glow),
-      inset 0 1px 0 var(--glass-highlight),
-      inset 0 0 0 1px var(--glass-rim-inner),
-      inset 0 -1px 0 var(--glass-tint);
+      var(--fw-glow);
   }
   &.fw-panel--dragging { transition: none; }
 }
@@ -612,7 +688,7 @@ function clampToViewport() {
   display: contents;
 }
 
-/* 内容保持在玻璃高光 / rim 之上 */
+/* 内容保持在玻璃层之上 */
 .fw-content > .fw-header,
 .fw-content > .fw-body,
 .fw-content > .fw-footer {
@@ -629,14 +705,9 @@ function clampToViewport() {
   pointer-events: none;
 }
 
-/* 变形中外壳圆角/尺寸持续变化：rim 与透镜滤镜先隐藏，避免小尺寸被强位移 */
-.fw-panel--morphing .glass-card__rim {
-  opacity: 0;
-}
-
-.fw-panel--morphing .glass-card__warp {
-  filter: none;
-}
+/* 变形期间 warp 的实例滤镜 scale 归零（只保留 backdrop 模糊），
+   动画结束后再缓动到满强度。filter 始终保持为非 none 的 url()，
+   否则 Chromium 在几何动画期间会跳过 backdrop-filter。 */
 
 /* ═══════════════════════════════════════════════════
    头部

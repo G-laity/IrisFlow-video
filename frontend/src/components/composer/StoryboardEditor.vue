@@ -330,7 +330,9 @@ async function submitRender(): Promise<void> {
         <p v-for="(err, i) in composerTimelineErrors" :key="i">· {{ err }}</p>
       </div>
 
-      <template v-if="viewMode === 'storyboard'">
+      <div class="sb-view-stack">
+        <Transition name="sb-view">
+          <div v-if="viewMode === 'storyboard'" key="storyboard" class="sb-view">
       <!-- 镜头列表 -->
       <section class="sb-section">
         <div class="sb-section-head">
@@ -503,8 +505,12 @@ async function submitRender(): Promise<void> {
           </template>
         </div>
       </section>
-      </template>
-      <TimelineTracks v-else :timeline="draft" @changed="scheduleSave" />
+          </div>
+          <div v-else key="tracks" class="sb-view">
+            <TimelineTracks :timeline="draft" @changed="scheduleSave" />
+          </div>
+        </Transition>
+      </div>
     </template>
   </div>
 </template>
@@ -515,6 +521,28 @@ async function submitRender(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* 分镜 / 轨道 视图切换：同一网格单元内交叉淡入，避免高度先塌陷 */
+.sb-view-stack { display: grid; }
+.sb-view {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.sb-view-enter-active,
+.sb-view-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.sb-view-leave-active { pointer-events: none; }
+.sb-view-enter-from { opacity: 0; transform: translateY(6px); }
+.sb-view-leave-to { opacity: 0; transform: translateY(-4px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-view-enter-active,
+  .sb-view-leave-active { transition: none; }
 }
 
 .sb-empty {

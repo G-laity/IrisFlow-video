@@ -7,7 +7,7 @@
 import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import type { Ref } from "vue";
 
-export function useTabIndicator(activeKey: Ref<string>) {
+export function useTabIndicator(activeKey: Ref<string>, activeSelector = ".tab-btn.active") {
   const navEl = ref<HTMLElement | null>(null);
   const indicatorEl = ref<HTMLElement | null>(null);
   const indicatorStyle = ref<Record<string, string>>({ opacity: "0" });
@@ -20,7 +20,7 @@ export function useTabIndicator(activeKey: Ref<string>) {
     const el = indicatorEl.value;
     if (!nav || !el) return;
 
-    const active = nav.querySelector<HTMLElement>(".tab-btn.active");
+    const active = nav.querySelector<HTMLElement>(activeSelector);
     if (!active) {
       indicatorStyle.value = { opacity: "0" };
       ready = false;

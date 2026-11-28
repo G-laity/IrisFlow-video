@@ -198,27 +198,25 @@ select:focus-visible {
 
 /* ═══════════════════════════════════════════════════
    IrisFlow Card Glass
-   三层：Background（页面本身）→ Glass → Content
-   合成顺序：REFRACT → SHADOW → TINT → LIGHT
+   两层：Background（页面本身）→ Glass（warp）→ Content
+   只保留折射与模糊，不再叠加 tint / 高光 / 扫光 / rim
    ═══════════════════════════════════════════════════ */
 
 .glass-card {
   position: relative;
   background: transparent;
-  border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  /* SHADOW + TINT：外阴影 + 外缘高光 + 内缘环 + 底部厚度染 */
-  box-shadow:
-    var(--shadow-md),
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px var(--glass-rim-inner),
-    inset 0 -1px 0 var(--glass-tint);
+  /* SHADOW：只保留外投影，保证浮窗与背景分层 */
+  box-shadow: var(--shadow-md);
   isolation: isolate;
   overflow: hidden;
 }
 
-/* 1. REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移滤镜；
-   内容层不在这个元素内，所以文字不会被折射 */
+/* REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移滤镜；
+   内容层不在这个元素内，所以文字不会被折射。
+   具体实例会用行内 filter 指向自己的透镜滤镜副本（FloatingWindow），
+   形变期间把位移 scale 归零，结束后逐帧升到满强度。
+   注意：该组合内不要再出现 mix-blend-mode，否则 backdrop-filter 不再渲染。 */
 .glass-card__warp {
   position: absolute;
   inset: 0;
@@ -231,90 +229,7 @@ select:focus-visible {
   filter: url(#glass-lens);
 }
 
-/* TINT：放在滤镜之上，避免 tint 被透镜滤镜的通道混合压成灰 */
-.glass-card__tint {
-  position: absolute;
-  inset: 12px;
-  z-index: 1;
-  border-radius: inherit;
-  pointer-events: none;
-  background: var(--glass-warp-tint);
-}
-
-/* 4. LIGHT：四点掠射环境光（冷/暖错开，只压在外半圈） */
-.glass-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  background:
-    radial-gradient(90% 62% at 8% -8%, var(--glass-sheen-strong), transparent 46%),
-    radial-gradient(82% 58% at 92% 108%, var(--glass-sheen-strong), transparent 48%),
-    radial-gradient(70% 52% at 92% -6%, var(--glass-sheen-warm), transparent 44%),
-    radial-gradient(70% 52% at 6% 108%, var(--glass-sheen-warm), transparent 46%);
-  mix-blend-mode: screen;
-  opacity: 0.9;
-  animation: liquid-glass-flow 18s ease-in-out infinite alternate;
-}
-
-/* 镜面扫光 */
-.glass-card::after {
-  content: "";
-  position: absolute;
-  top: -60%;
-  bottom: -60%;
-  left: -40%;
-  right: -40%;
-  z-index: 2;
-  pointer-events: none;
-  background: linear-gradient(
-    115deg,
-    transparent 40%,
-    var(--glass-sheen) 48%,
-    transparent 56%
-  );
-  mix-blend-mode: screen;
-  opacity: 0;
-  animation: liquid-glass-sheen 12s ease-in-out infinite;
-}
-
-/* INNER / OUTER rim：参考 liquid-glass-react 的 1.5px 渐变环 */
-.glass-card__rim {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  border-radius: inherit;
-  padding: 1.5px;
-  pointer-events: none;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.55) 30%,
-    rgba(255, 255, 255, 0.14) 62%,
-    rgba(255, 255, 255, 0) 100%);
-  mix-blend-mode: screen;
-  opacity: 0.95;
-  box-shadow:
-    0 0 0 0.5px rgba(255, 255, 255, 0.38) inset,
-    0 1px 3px rgba(255, 255, 255, 0.20) inset,
-    0 -1px 4px rgba(0, 0, 0, 0.35) inset;
-}
-
-:root[data-theme="light"] .glass-card__rim {
-  mix-blend-mode: normal;
-  opacity: 0.8;
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0) 0%,
-    rgba(255, 255, 255, 0.95) 30%,
-    rgba(255, 255, 255, 0.32) 62%,
-    rgba(255, 255, 255, 0) 100%);
-}
-
-/* CONTENT：永远在玻璃与 rim 之上，不参与滤镜 */
+/* CONTENT：在玻璃之上，不参与滤镜 */
 .glass-card__body {
   position: relative;
   z-index: 4;
@@ -333,25 +248,12 @@ select:focus-visible {
     inset 0 -1px 0 var(--glass-tint);
 }
 
-@keyframes liquid-glass-flow {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
-  to   { transform: translate3d(1.5%, 1.5%, 0) scale(1.05); }
-}
-
-@keyframes liquid-glass-sheen {
-  0%   { transform: translateX(-45%) rotate(0.001deg); opacity: 0; }
-  8%   { opacity: 0.55; }
-  55%  { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
-  100% { transform: translateX(45%) rotate(0.001deg); opacity: 0; }
-}
-
 /* 不支持 backdrop-filter 的浏览器回退为实色，避免半透明看不清 */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   .glass-card {
     background: var(--bg-secondary);
   }
-  .glass-card__warp,
-  .glass-card__tint {
+  .glass-card__warp {
     display: none;
   }
 }

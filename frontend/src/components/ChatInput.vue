@@ -263,15 +263,7 @@ function handleSend() {
 </script>
 
 <template>
-  <div class="input-card glass-card" :class="{ 'input-card--hero': hero }">
-    <!-- REFRACT：独立 warp 层，backdrop 模糊 + 透镜位移；内容不在其中 -->
-    <span class="glass-card__warp" aria-hidden="true"></span>
-
-    <!-- TINT：滤镜之上的半透明染色，保证文字对比 -->
-    <span class="glass-card__tint" aria-hidden="true"></span>
-
-    <!-- INNER/OUTER rim + 边缘色散：在玻璃之上、内容之下 -->
-    <span class="glass-card__rim" aria-hidden="true"></span>
+  <div class="input-card" :class="{ 'input-card--hero': hero }">
     <!-- 上传错误提示 -->
     <div v-if="uploadError" class="upload-error">
       <span>{{ uploadError }}</span>
@@ -412,25 +404,15 @@ function handleSend() {
 <style scoped>
 .input-card {
   position: relative;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
   border-radius: 20px;
-  /* 输入栏比浮窗轻一档，避免底部玻璃压住聊天内容 */
-  box-shadow:
-    var(--shadow-sm),
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px var(--glass-rim-inner),
-    inset 0 -1px 0 var(--glass-tint);
   overflow: hidden;
-  isolation: isolate;
 }
 
 /* 开始页的大输入卡 */
 .input-card--hero {
   border-radius: 24px;
-  box-shadow:
-    var(--shadow-md),
-    inset 0 1px 0 var(--glass-highlight),
-    inset 0 0 0 1px var(--glass-rim-inner),
-    inset 0 -1px 0 var(--glass-tint);
 }
 
 .input-card--hero .input-area {
@@ -452,12 +434,6 @@ function handleSend() {
   width: 40px;
   height: 40px;
   font-size: 18px;
-}
-
-/* 内容在玻璃高光与 rim 之上 */
-.input-card > *:not(.glass-card__rim):not(.glass-card__warp):not(.glass-card__tint) {
-  position: relative;
-  z-index: 4;
 }
 
 /* 聚焦时 textarea 底边强调线：从中心向两侧缓缓展开 */
